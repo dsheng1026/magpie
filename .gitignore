@@ -9,6 +9,7 @@ magpie_calib.*
 *.mz
 *.rds
 /input/
+patch_input/*.tgz
 
 #ignore outputs
 *.gdx
