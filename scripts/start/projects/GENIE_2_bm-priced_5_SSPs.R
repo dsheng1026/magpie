@@ -152,7 +152,7 @@ beV <- c(45) # Options: 0, 5, 7, 10, 15, 25, 45
 cfg$gms$tc <- "exo"
 
 ### Biodiv
-blV <- c(0, 0.78) # Options: 0, 0.7, 0.74, 0.78
+blV <- c(0.78) # Options: 0, 0.7, 0.74, 0.78
 
 ### Food
 mpV <- c(0) # Options: 0, 25, 50, 75
@@ -169,6 +169,7 @@ for (bl in blV) {
   cfg$gms$c44_bii_decrease <- bd
   cfg$gms$s44_bii_target <- bl
   cfg$gms$c22_protect_scenario <- pa
+  cfg$gms$bii_reg <- 1
 
   for (mp in mpV) {
     preflag <- paste0(ssp_flag, "BD", str_pad(bl * 100, 2, pad = "0"))

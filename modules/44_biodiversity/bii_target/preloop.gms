@@ -19,3 +19,10 @@ p44_bii_target(t,i,biome44) = 0;
 if (s44_start_year <= sm_fix_SSP2,
   abort "Start year for BII target interpolation has to be greater than sm_fix_SSP2"
 );
+
+i44_bii_target(i,biome44) = 0;
+if (c44_bii_reg = 0,
+   i44_bii_target(i,biome44) = s44_bii_target;
+else
+   i44_bii_target(i,biome44) = f44_bii_target(i,biome44);
+);

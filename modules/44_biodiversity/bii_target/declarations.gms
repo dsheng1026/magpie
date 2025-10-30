@@ -18,6 +18,7 @@ parameters
  p44_start_value(i,biome44)       Start value for BII target (1)
  i44_biome_share(j,biome44)       Share of biome type in each spatial unit (1)
  i44_biome_area_reg(i,biome44)    Area of range-rarity weighted biome type in each region (mio. ha)
+ i44_bii_target(i, biome44)       Region-biome level BII target (1)
 ;
 
 equations
