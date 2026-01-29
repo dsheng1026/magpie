@@ -153,10 +153,10 @@ $title magpie
 * Total number of cells: 200
 * 
 * Number of cells per region:
-*   CAZ  CHA  EUR  IND  JPN  LAM  MEA  NEU  OAS  REF  SSA  USA
-*    14   23   10    7    4   26   21    9   16   23   32   15
+*   AFR  CHA  CPA  EEU  FSU  LAM  MEA  NAM  PAO  PAS  SAS  WEU
+*    33   23    4    3   22   27   21   17   14   10   11   15
 * 
-* Regionscode: 62eff8f7
+* Regionscode: 5ff27be8
 *###################### R SECTION END (VERSION INFO) ###########################
 
 $offupper
@@ -179,9 +179,9 @@ $offlisting
 **************************MODEL SPECIFIC SCALARS********************************
 *                    Key parameters during model runs
 
-$setglobal c_timesteps  coup2100
+$setglobal c_timesteps  coup2110
 $setglobal c_past  till_2010
-$setglobal c_title  default
+$setglobal c_title  SSP2_BD78_BE45_G0000price_rev1
 
 scalars
 s_use_gdx   use of gdx files                                       / 0 /
@@ -194,7 +194,7 @@ $setglobal drivers  aug17
 $setglobal land  landmatrix_dec18
 $setglobal costs  default
 $setglobal interest_rate  select_apr20
-$setglobal tc  endo_jan22
+$setglobal tc  exo
 $setglobal yields  managementcalib_aug19
 
 $setglobal food  anthro_iso_jun22

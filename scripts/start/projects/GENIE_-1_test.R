@@ -39,33 +39,62 @@ cfg$output <- c("output_check", "rds_report")
 # ### Identifier and folder
 # ###############################################
 # identifierFlag <- "MESSAGEix"
-# cfg$title <- "MESSAGE_default_rev4.119_without_GENIE_presets"
+# cfg$title <- "MESSAGE_default_rev4.119_with_default.cfg"
 # ###############################################
 # cfg$info$flag <- identifierFlag
-
 # start_run(cfg, codeCheck = FALSE)
 
-# #load GENIE config presets, write it before starting the run.
-# # cfg <- setScenario(cfg, "SSP2")
-# preset <-  "GENIE_SCP"
-# cfg <- setScenario(cfg, c(preset), scenario_config = "config/projects/scenario_config_genie.csv")
+### Folder
+###############################################
+cfg$title <- "13tccost"
+###############################################
+cfg$gms$c13_tccost <- "high"
+start_run(cfg, codeCheck = FALSE)
 
+### Folder
+###############################################
+cfg$title <- "13tccost+14yields"
+###############################################
+# source("config/default.cfg") #nolinter
+cfg$gms$c14_yields_scenario  <- "nocc"
+start_run(cfg, codeCheck = FALSE)
+
+### Folder
+###############################################
+cfg$title <- "13tccost+14yields+30growth"
+###############################################
+# source("config/default.cfg") #nolinter
+cfg$gms$s30_annual_max_growth <- 0.02
+start_run(cfg, codeCheck = FALSE)
+
+### Folder
+###############################################
+cfg$title <- "13tccost+14yields+30growth+32hvarea"
+###############################################
+# source("config/default.cfg") #nolinter
+cfg$gms$s32_hvarea <- 0
+start_run(cfg, codeCheck = FALSE)
+
+### Folder
+###############################################
+cfg$title <- "13tccost+14yields+30growth+32hvarea+35hvarea"
+###############################################
+# source("config/default.cfg") #nolinter
+cfg$gms$s35_hvarea <- 0
+start_run(cfg, codeCheck = FALSE)
+
+### Folder
+###############################################
+cfg$title <- "13tccost+14yields+30growth+32hvarea+35hvarea+73timber"
+###############################################
+# source("config/default.cfg") #nolinter
+cfg$gms$s73_timber_demand_switch <- 0
+start_run(cfg, codeCheck = FALSE)
+
+# # Template to add new settings:
 # ### Folder
 # ###############################################
-# cfg$title <- "MESSAGE_default_rev4.119_with_GENIE_presets"
+# cfg$title <- "MESSAGE_default_rev4.119_with_"
 # ###############################################
 
-# ##########################################################
 # start_run(cfg, codeCheck = FALSE)
-
-### Identifier and folder
-###############################################
-identifierFlag <- "MESSAGEix"
-cfg$title <- "MESSAGE_default_SSP1"
-###############################################
-cfg$info$flag <- identifierFlag
-
-# 
-cfg <- setScenario(cfg, "SSP2")
-
-start_run(cfg, codeCheck = FALSE)

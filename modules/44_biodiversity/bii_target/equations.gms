@@ -25,6 +25,11 @@
 *' Costs accrue only for `v44_bii_missing`. In the best case costs should be zero or close to zero.
 *' Costs strongly depend on the choice of `s44_bii_target`.
 
+* We set this equation to zero so that there is no cost to missing BII target.
+* Resetting the equation to what it was.
  q44_cost(i2) .. sum(cell(i2,j2), vm_cost_bv_loss(j2)) =e= 
           sum(biome44, v44_bii_missing(i2,biome44)) * s44_cost_bii_missing;
+
+* q44_cost(i2) .. sum(cell(i2,j2), vm_cost_bv_loss(j2)) =e= 0;
+* 0 =e= sum(biome44, v44_bii_missing(i2,biome44)) * s44_cost_bii_missing;
 

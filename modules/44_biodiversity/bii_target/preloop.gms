@@ -19,3 +19,6 @@ p44_bii_target(t,i,biome44) = 0;
 if (s44_start_year <= sm_fix_SSP2,
   abort "Start year for BII target interpolation has to be greater than sm_fix_SSP2"
 );
+
+* Fix the BII cost to zero:
+* vm_cost_bv_loss.fx(j) = 0;
