@@ -40,13 +40,13 @@ cfg$gms$c_timesteps <- "coup2110"
 
 ssp_flag <- "SSP2"
 
-cfg$input <- c(regional    = "<path_to_file>/rev4.119_5ff27be8_magpie.tgz",
-               cellular    = "<path_to_file>rev4.119_5ff27be8_1b5c3817_cellularmagpie_c200_MRI-ESM2-0-ssp245_lpjml-8e6c5eb1.tgz",
+cfg$input <- c(regional    = "rev4.119_5ff27be8_magpie.tgz",
+               cellular    = "rev4.119_5ff27be8_1b5c3817_cellularmagpie_c200_MRI-ESM2-0-ssp245_lpjml-8e6c5eb1.tgz",
             #    cellular    = "rev4.119_5ff27be8_fd712c0b_cellularmagpie_c200_MRI-ESM2-0-ssp370_lpjml-8e6c5eb1.tgz",
-               validation  = "<path_to_file>/rev4.119_5ff27be8_validation.tgz",
+               validation  = "rev4.119_5ff27be8_validation.tgz",
                additional  = "additional_data_rev4.62.tgz",
               #  patch       = "SSP2.tgz"
-               patch       = "<path_to_file>/SSP2_old.tgz")
+               patch       = "SSP2_old.tgz")
 
 # # which input data sets should be used?
 # cfg$input <- c(regional    = "rev4.87_26df900e_magpie.tgz",
