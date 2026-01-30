@@ -123,7 +123,7 @@ blV <- c(0) #BII lower bound (0, 0.7, 0.74, 0.78), default 0
 mpV <- c(0)
 
 ### Forest
-cfg$gms$s32_max_aff_cell_2025 <- 0.005
+cfg$gms$s32_max_aff_cell_2025 <- 0.005 # increasing this parameter a bit might help with infeasibility for GHG runs
 
 
 for (bl in blV) {
@@ -151,7 +151,7 @@ for (bl in blV) {
     for (be in beV) {
 
       be_str <- str_pad(be, 2, pad = "0")
-      cfg$gms$c60_2ndgen_biodem <- paste0("SSP2_BD00_BE", be_str, "_G0000price_rev1")
+      cfg$gms$c60_2ndgen_biodem <- paste0("SSP2_BD00_BE", be_str, "_G0000price_rev1") # this need to align with the f60_bioenergy_dem.cs3 column names
 
       for (g in gV){
 

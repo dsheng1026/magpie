@@ -13,7 +13,7 @@ cfg$repositories <- append(list("https://rse.pik-potsdam.de/data/magpie/public" 
                            getOption("magpie_repos"))
 
 # Folder creation and SLURM queue settings.
-cfg$force_replace <- TRUE
+cfg$force_replace <- TRUE # over write the output, otherwise, stop if same output name exist
 cfg$qos <- "priority"
 
 # Setting the time horizon to what we expect for MESSAGE: 2110.
@@ -45,8 +45,8 @@ cfg$output <- c("output_check", "rds_report")
 
 ### Identifier and folder
 ###############################################
-identifierFlag <- "Matrix_MESSAGE_historical_BE_rev3"
-cfg$title <- "MESSAGE_historical_2-gen_BE_data"
+identifierFlag <- "Matrix_MESSAGE_historical_BE_rev3" # name of output folder, you name it, use the same name for price and demand driven run
+cfg$title <- "MESSAGE_historical_2-gen_BE_data" # this is required for shiny only, keep it as it is
 ###############################################
 
 # Set the identifier flag for shiny app, and output folder.
@@ -61,6 +61,8 @@ cfg <- setScenario(cfg, "SSP2")
 
 # # Recalculate land conversion cost
 # cfg$recalibrate_landconversion_cost <- TRUE
+
+# settings needed for M-M linkage --------
 
 # Cost of technological change
 cfg$gms$c13_tccost <- "high"
@@ -89,14 +91,23 @@ cfg$gms$s30_annual_max_growth <- 0.02
 ### Cost of missing BII set to 10 million USD rather than 1 million as in default.cfg
 cfg$gms$s44_cost_bii_missing <- 10000000
 
+# end of the M-M specific changed --------
+
 # No GHG price
+
+# G0000exp2110: exponential carbon price trejactory determined by Jan.S JPD and Keywan
 cfg$gms$c56_pollutant_prices <- "G0000exp2110" # def = R34M410-SSP2-NPi2025, "G0000"
 cfg$gms$c56_pollutant_prices_noselect <- "G0000exp2110" # def = R34M410-SSP2-NPi2025, "G0000"
 
 # # Bioenergy production settings:
 # cfg$gms$c60_1stgen_biodem <- "phaseout2020"
-cfg$gms$c60_2ndgen_biodem <- "MESSAGE_SSP2_historical_BE" # def = R34M410-SSP2-NPi2025
-cfg$gms$c60_2ndgen_biodem_noselect <- "MESSAGE_SSP2_historical_BE" # def = R34M410-SSP2-NPi2025
+
+
+# price-driven step: mute these two for price-driven run
+
+# cfg$gms$c60_2ndgen_biodem <- "MESSAGE_SSP2_historical_BE" # def = R34M410-SSP2-NPi2025
+# in selected iso, there is biomass price, nonselect muted for biomass price, details in config.
+# cfg$gms$c60_2ndgen_biodem_noselect <- "MESSAGE_SSP2_historical_BE" # def = R34M410-SSP2-NPi2025
 
 
 # ### BE
