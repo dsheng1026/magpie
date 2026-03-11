@@ -154,9 +154,9 @@ $title magpie
 * 
 * Number of cells per region:
 *   AFR  CHA  CPA  EEU  FSU  LAM  MEA  NAM  PAO  PAS  SAS  WEU
-*    33   23    4    3   22   27   21   17   14   10   11   15
+*    35   23    4    3   22   28   18   17   14   10   11   15
 * 
-* Regionscode: 5ff27be8
+* Regionscode: 26df900e
 *###################### R SECTION END (VERSION INFO) ###########################
 
 $offupper
@@ -181,7 +181,7 @@ $offlisting
 
 $setglobal c_timesteps  coup2110
 $setglobal c_past  till_2010
-$setglobal c_title  SSP2_BD78_BE45_G0000price_rev1
+$setglobal c_title  MESSAGE_settings_test_SSP2
 
 scalars
 s_use_gdx   use of gdx files                                       / 0 /
@@ -194,7 +194,7 @@ $setglobal drivers  aug17
 $setglobal land  landmatrix_dec18
 $setglobal costs  default
 $setglobal interest_rate  select_apr20
-$setglobal tc  exo
+$setglobal tc  endo_jan22
 $setglobal yields  managementcalib_aug19
 
 $setglobal food  anthro_iso_jun22
