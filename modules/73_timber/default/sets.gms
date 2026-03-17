@@ -47,7 +47,7 @@ nopaper, construction
 
 build_scen Building wood scenario
 /
-BAU, 10pc, 50pc, 90pc
+BAU, 10pc, 50pc, 90pc, Highwood,Highwood_C,Reference
 /
 
 ;
