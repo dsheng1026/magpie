@@ -13,7 +13,8 @@
 sets
 
   scen2nd60 second generation bioenergy scenarios
-    / PIK_GDP,
+    / Feedback_Dec2025,
+      PIK_GDP,
       PIK_H2C,
       PIK_HBL,
       PIK_HOS,
