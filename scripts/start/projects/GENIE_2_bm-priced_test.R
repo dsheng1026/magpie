@@ -45,7 +45,7 @@ cfg$output <- c("output_check", "rds_report")
 
 ### Identifier and folder
 ###############################################
-identifierFlag <- "Matrix_MESSAGE_historical_BE_rev3" # name of output folder, you name it, use the same name for price and demand driven run
+identifierFlag <- "Matrix_test_rev1" # name of output folder, you name it, use the same name for price and demand driven run
 cfg$title <- "MESSAGE_historical_2-gen_BE_data" # this is required for shiny only, keep it as it is
 ###############################################
 
@@ -58,6 +58,7 @@ cfg <- setScenario(cfg, "SSP2")
 
 # # Recalculate NPI/NDC switch
 # cfg$recalc_npi_ndc <- TRUE
+cfg$recalc_npi_ndc <- FALSE
 
 # # Recalculate land conversion cost
 # cfg$recalibrate_landconversion_cost <- TRUE
@@ -89,7 +90,7 @@ cfg$gms$s30_annual_max_growth <- 0.02
 # cfg$gms$s35_hvarea <- 0
 
 ### Cost of missing BII set to 10 million USD rather than 1 million as in default.cfg
-cfg$gms$s44_cost_bii_missing <- 10000000
+# cfg$gms$s44_cost_bii_missing <- 10000000
 
 # end of the M-M specific changed --------
 
@@ -111,15 +112,16 @@ cfg$gms$c56_pollutant_prices_noselect <- "G0000exp2110" # def = R34M410-SSP2-NPi
 
 
 # ### BE
-cfg$gms$s60_2ndgen_bioenergy_dem_min <- 0
-cfg$gms$s60_bioenergy_1st_subsidy <- 0
-beV <- c(0, 45) # Options: 0, 5, 7, 10, 15, 25, 45
+# cfg$gms$s60_2ndgen_bioenergy_dem_min <- 1
+# cfg$gms$s60_bioenergy_1st_subsidy <- 6.5
+
+beV <- c(0, 5, 7, 10, 15, 25, 45) # Options: 0, 5, 7, 10, 15, 25, 45
 
 ### Tau / Yield
 cfg$gms$tc <- "exo"
 
 ### Biodiv
-blV <- c(0, 0.78) # Options: 0, 0.7, 0.74, 0.78
+blV <- c(0) # Options: 0, 0.7, 0.74, 0.78
 
 ### Food
 mpV <- c(0) # Options: 0, 25, 50, 75
