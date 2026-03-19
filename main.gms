@@ -181,7 +181,7 @@ $offlisting
 
 $setglobal c_timesteps  coup2110
 $setglobal c_past  till_2010
-$setglobal c_title  SSP2_BD-none_BE07_G0000price_rev2
+$setglobal c_title  SSP2_BD-none_BE00_G0200demand_rev2
 
 scalars
 s_use_gdx   use of gdx files                                       / 0 /
@@ -194,7 +194,7 @@ $setglobal drivers  aug17
 $setglobal land  landmatrix_dec18
 $setglobal costs  default
 $setglobal interest_rate  select_apr20
-$setglobal tc  exo
+$setglobal tc  endo_jan22
 $setglobal yields  managementcalib_aug19
 
 $setglobal food  anthro_iso_jun22

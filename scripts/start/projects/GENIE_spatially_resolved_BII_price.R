@@ -44,8 +44,8 @@ cfg$gms$biodiversity <- "bii_spatially_resolved"
 
 ### Identifier and folder
 ###############################################
-identifierFlag <- "Spatially_resolved_BII_rev2"
-cfg$title <- "Spatially_resolved_BII_rev2"
+identifierFlag <- "Spatially_resolved_BII_rev3"
+cfg$title <- "Spatially_resolved_BII_rev3"
 ###############################################
 
 # Set the identifier flag for shiny app, and output folder.
@@ -107,7 +107,7 @@ beV <- c(0, 5, 7, 10, 15, 25, 45) # Options: 0, 5, 7, 10, 15, 25, 45
 cfg$gms$tc <- "exo"
 
 ### Biodiv: BD-none (no BII target) and BD-high (spatially resolved targets from CSV)
-blV <- c("none", "high")
+blV <- c("high") # Options: "none", "high"
 
 ### Food
 mpV <- c(0) # Options: 0, 25, 50, 75
@@ -139,7 +139,7 @@ for (bl in blV) {
 
       ##############################################
       runflag <- "price"
-      cfg$title <- paste0(preflag, "_BE", str_pad(be, 2, pad = "0"), "_G0000", runflag, "_rev2")
+      cfg$title <- paste0(preflag, "_BE", str_pad(be, 2, pad = "0"), "_G0000", runflag, "_rev3")
 
       start_run(cfg, codeCheck = FALSE)
 
