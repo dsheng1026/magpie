@@ -42,7 +42,7 @@ scalars
 ;
 
 $setglobal c60_price_implementation  lin
-$setglobal c60_2ndgen_biodem  SSP2_BD00_BE00_G0000price_rev1
+$setglobal c60_2ndgen_biodem  SSP2_BD-high_BE45_G0000price_rev2
 $setglobal c60_2ndgen_biodem_noselect  R34M410-SSP2-NPi2025
 
 

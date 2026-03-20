@@ -181,7 +181,7 @@ $offlisting
 
 $setglobal c_timesteps  coup2110
 $setglobal c_past  till_2010
-$setglobal c_title  SSP2_BD-none_BE00_G0200demand_rev2
+$setglobal c_title  SSP2_BD-high_BE45_G4000demand_rev2
 
 scalars
 s_use_gdx   use of gdx files                                       / 0 /
