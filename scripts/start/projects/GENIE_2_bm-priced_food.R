@@ -1,18 +1,3 @@
-# |  (C) 2008-2025 Potsdam Institute for Climate Impact Research (PIK)
-# |  authors, and contributors see CITATION.cff file. This file is part
-# |  of MAgPIE and licensed under AGPL-3.0-or-later. Under Section 7 of
-# |  AGPL-3.0, you are granted additional permissions described in the
-# |  MAgPIE License Exception, version 1.0 (see LICENSE file).
-# |  Contact: magpie@pik-potsdam.de
-
-# ----------------------------------------------------------
-# description: GENIE project MESSAGE-MAgPIE Emulator - Step 3 - ghg price sensitivity for step 2 biomass demands
-# ----------------------------------------------------------
-
-######################################
-#### Script to start a MAgPIE run ####
-######################################
-
 library(lucode2)
 library(magclass)
 library(gms)
@@ -28,7 +13,7 @@ cfg$repositories <- append(list("https://rse.pik-potsdam.de/data/magpie/public" 
                            getOption("magpie_repos"))
 
 # Folder creation and SLURM queue settings.
-cfg$force_replace <- TRUE
+cfg$force_replace <- TRUE # over write the output, otherwise, stop if same output name exist
 cfg$qos <- "priority"
 
 # Setting the time horizon to what we expect for MESSAGE: 2110.
@@ -46,7 +31,7 @@ cfg$input <- c(regional    = "rev4.119_5ff27be8_magpie.tgz",
                validation  = "rev4.119_5ff27be8_validation.tgz",
                additional  = "additional_data_rev4.62.tgz",
               #  patch       = "SSP2.tgz"
-               patch       = "SSP2_price.tgz")
+               patch       = "SSP2_old.tgz")
 
 # # which input data sets should be used?
 # cfg$input <- c(regional    = "rev4.87_26df900e_magpie.tgz",
@@ -60,8 +45,8 @@ cfg$output <- c("output_check", "rds_report")
 
 ### Identifier and folder
 ###############################################
-identifierFlag <- "Matrix_test_rev1"
-cfg$title <- "BE_test" # this is required for shiny only, keep it as it is
+identifierFlag <- "Food_test_rev1" # name of output folder, you name it, use the same name for price and demand driven run
+cfg$title <- "Sustainable_CDR" # this is required for shiny only, keep it as it is
 ###############################################
 
 # Set the identifier flag for shiny app, and output folder.
@@ -73,9 +58,12 @@ cfg <- setScenario(cfg, "SSP2")
 
 # # Recalculate NPI/NDC switch
 # cfg$recalc_npi_ndc <- TRUE
+cfg$recalc_npi_ndc <- FALSE
 
 # # Recalculate land conversion cost
 # cfg$recalibrate_landconversion_cost <- TRUE
+
+# settings needed for M-M linkage --------
 
 # Cost of technological change
 cfg$gms$c13_tccost <- "high"
@@ -95,37 +83,50 @@ cfg$gms$c14_yields_scenario  <- "nocc"
 # Capping the annual max cropland growth per year per region, relative to current level
 cfg$gms$s30_annual_max_growth <- 0.02
 
+## food demand
+
 # # No harvesting or establishment of new plantations
 # cfg$gms$s32_hvarea <- 0
 
 # # No timber production from natveg
 # cfg$gms$s35_hvarea <- 0
 
-# ### Cost of missing BII set to 10 million USD rather than 1 million as in default.cfg
+### Cost of missing BII set to 10 million USD rather than 1 million as in default.cfg
 # cfg$gms$s44_cost_bii_missing <- 10000000
 
+# end of the M-M specific changed --------
+
 # No GHG price
+
+# G0000exp2110: exponential carbon price trejactory determined by Jan.S JPD and Keywan
 cfg$gms$c56_pollutant_prices <- "G0000exp2110" # def = R34M410-SSP2-NPi2025, "G0000"
 cfg$gms$c56_pollutant_prices_noselect <- "G0000exp2110" # def = R34M410-SSP2-NPi2025, "G0000"
 
-### BE
+# # Bioenergy production settings:
+# cfg$gms$c60_1stgen_biodem <- "phaseout2020"
+
+
+# price-driven step: mute these two for price-driven run
+
+# cfg$gms$c60_2ndgen_biodem <- "MESSAGE_SSP2_historical_BE" # def = R34M410-SSP2-NPi2025
+# in selected iso, there is biomass price, nonselect muted for biomass price, details in config.
+# cfg$gms$c60_2ndgen_biodem_noselect <- "MESSAGE_SSP2_historical_BE" # def = R34M410-SSP2-NPi2025
+
+
+# ### BE
 cfg$gms$s60_2ndgen_bioenergy_dem_min <- 0
 cfg$gms$s60_bioenergy_1st_subsidy <- 0
 
-beV <- c(0, 5, 7, 10, 15, 25, 45) #0, 5, 7, 10, 15, 25, 45
+beV <- c(0, 5, 7, 10, 15, 25, 45) # Options: 0, 5, 7, 10, 15, 25, 45
 
-### GHG
-gV <- c(0, 10, 20, 50, 100, 200, 400, 600, 1000, 2000, 3000, 4000) #0, 10, 20, 50, 100, 200, 400, 600, 1000, 2000, 3000, 4000
+### Tau / Yield
+cfg$gms$tc <- "exo"
 
 ### Biodiv
-blV <- c(0) #BII lower bound (0, 0.7, 0.74, 0.78), default 0
-
+blV <- c(0) # Options: 0, 0.7, 0.74, 0.78
 ### Food
-mpV <- c(0)
-
-### Forest
-cfg$gms$s32_max_aff_cell_2025 <- 0.005 # increasing this parameter a bit might help with infeasibility for GHG runs
-
+# mpV <- c(0) # Options: 0, 25, 50, 75
+mpV <- c("endo", "no_underweight")
 
 for (bl in blV) {
   bd <- 0
@@ -140,34 +141,26 @@ for (bl in blV) {
   cfg$gms$c22_protect_scenario <- pa
 
   for (mp in mpV) {
-    cfg$gms$s15_rumdairy_scp_substitution <- mp / 100
-
     preflag <- paste0("SSP2_BD", str_pad(bl * 100, 2, pad = "0"))
-    
-    cfg$results_folder <- paste(
-      "output", identifierFlag, "SSP2_BD00", ":title:", sep = "/"
-    )
+    cfg$results_folder <- paste("output", identifierFlag, preflag, ":title:", sep = "/")
     cfg$info$flag2 <- preflag
 
+    cfg$gms$s15_rumdairy_scp_substitution <- 0 / 100
+    cfg$gms$food <- "anthro_iso_jun22"
+    cfg$gms$s15_elastic_demand <- 1
+    cfg$gms$s15_exo_diet <- 3               # def = 0
+    cfg$gms$c15_kcal_scen <- mp
+
     for (be in beV) {
+      cfg$gms$s60_bioenergy_1st_price <- be
+      cfg$gms$s60_bioenergy_2nd_price <- be
 
-      be_str <- str_pad(be, 2, pad = "0")
-      # cfg$gms$c60_2ndgen_biodem <- paste0("SSP2_BD00_BE", be_str, "_G0000price_rev1") # this need to align with the f60_bioenergy_dem.cs3 column names
-      cfg$gms$c60_2ndgen_biodem <- paste0("BE", be_str) # this need to align with the f60_bioenergy_dem.cs3 column names
+      ##############################################
+      runflag <- "price"
+      cfg$title <- paste0(preflag, "_BE", str_pad(be, 2, pad = "0"), "_G0000", runflag, "_", mp)
 
-      for (g in gV){
+      start_run(cfg, codeCheck = FALSE)
 
-        g_str <- str_pad(g, 4, pad = "0")
-        g_formatted <- paste0("G", g_str)
-
-        cfg$gms$c56_pollutant_prices <- paste0(g_formatted, "exp2110")
-
-        ##############################################
-        cfg$title <- paste0("SSP2_BD00_BE", be_str, "_G", g_str, "demand_rev1")
-
-        start_run(cfg, codeCheck = FALSE)
-
-      } # GHG
     } # BE
   } # MP replacement
 } # BII lower bound

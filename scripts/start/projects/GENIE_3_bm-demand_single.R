@@ -110,12 +110,13 @@ cfg$gms$c56_pollutant_prices_noselect <- "G0000exp2110" # def = R34M410-SSP2-NPi
 
 ### BE
 cfg$gms$s60_2ndgen_bioenergy_dem_min <- 0
-cfg$gms$s60_bioenergy_1st_subsidy <- 0
+# cfg$gms$s60_bioenergy_1st_subsidy <- 0
+cfg$gms$s60_bioenergy_1st_subsidy <- 0.00000001 # increase for infeasibility in GHG runs
 
-beV <- c(0, 5, 7, 10, 15, 25, 45) #0, 5, 7, 10, 15, 25, 45
+beV <- c(15) # feed in which ever scenario that did not solve
 
 ### GHG
-gV <- c(0, 10, 20, 50, 100, 200, 400, 600, 1000, 2000, 3000, 4000) #0, 10, 20, 50, 100, 200, 400, 600, 1000, 2000, 3000, 4000
+gV <- c(4000) # feed in which ever scenario that did not solve
 
 ### Biodiv
 blV <- c(0) #BII lower bound (0, 0.7, 0.74, 0.78), default 0
@@ -124,7 +125,7 @@ blV <- c(0) #BII lower bound (0, 0.7, 0.74, 0.78), default 0
 mpV <- c(0)
 
 ### Forest
-cfg$gms$s32_max_aff_cell_2025 <- 0.005 # increasing this parameter a bit might help with infeasibility for GHG runs
+cfg$gms$s32_max_aff_cell_2025 <- 0.0050001 # increasing this parameter a bit might help with infeasibility for GHG runs
 
 
 for (bl in blV) {

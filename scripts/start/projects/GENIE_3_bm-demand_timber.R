@@ -60,7 +60,7 @@ cfg$output <- c("output_check", "rds_report")
 
 ### Identifier and folder
 ###############################################
-identifierFlag <- "Matrix_test_rev1"
+identifierFlag <- "timber"
 cfg$title <- "BE_test" # this is required for shiny only, keep it as it is
 ###############################################
 
@@ -110,42 +110,47 @@ cfg$gms$c56_pollutant_prices_noselect <- "G0000exp2110" # def = R34M410-SSP2-NPi
 
 ### BE
 cfg$gms$s60_2ndgen_bioenergy_dem_min <- 0
-cfg$gms$s60_bioenergy_1st_subsidy <- 0
+# cfg$gms$s60_bioenergy_1st_subsidy <- 0
+cfg$gms$s60_bioenergy_1st_subsidy <- 0.00000001 # increase for infeasibility in GHG runs
 
-beV <- c(0, 5, 7, 10, 15, 25, 45) #0, 5, 7, 10, 15, 25, 45
+beV <- c(0, 45) # feed in which ever scenario that did not solve
 
 ### GHG
-gV <- c(0, 10, 20, 50, 100, 200, 400, 600, 1000, 2000, 3000, 4000) #0, 10, 20, 50, 100, 200, 400, 600, 1000, 2000, 3000, 4000
+gV <- c(0, 4000) # feed in which ever scenario that did not solve
 
 ### Biodiv
-blV <- c(0) #BII lower bound (0, 0.7, 0.74, 0.78), default 0
+# blV <- c(0) #BII lower bound (0, 0.7, 0.74, 0.78), default 0
+
+blV <- c("none", "BH") # 0: none ; 1: "BH"
 
 ### Food
-mpV <- c(0)
+# mpV <- c(0)
+### Timber
+mpV <- c("BAU", "Highwood_adj")
 
 ### Forest
-cfg$gms$s32_max_aff_cell_2025 <- 0.005 # increasing this parameter a bit might help with infeasibility for GHG runs
+# cfg$gms$s32_max_aff_cell_2025 <- 0.0050001 # increasing this parameter a bit might help with infeasibility for GHG runs
 
 
 for (bl in blV) {
   bd <- 0
-  pa <- "none" # "BH"
-  if (bl == 0) {
+  if (bl == "none") {
     bd <- 1
-    pa <- "none"
   }
 
   cfg$gms$c44_bii_decrease <- bd
-  cfg$gms$s44_bii_target <- bl
-  cfg$gms$c22_protect_scenario <- pa
+  # cfg$gms$s44_bii_target <- bl
+  cfg$gms$c22_protect_scenario <- bl
 
   for (mp in mpV) {
-    cfg$gms$s15_rumdairy_scp_substitution <- mp / 100
+    cfg$gms$s15_rumdairy_scp_substitution <- 0 / 100
 
-    preflag <- paste0("SSP2_BD", str_pad(bl * 100, 2, pad = "0"))
+    cfg$gms$c73_build_demand <- mp
+
+    preflag <- paste0("SSP2_BD_", bl)
     
     cfg$results_folder <- paste(
-      "output", identifierFlag, "SSP2_BD00", ":title:", sep = "/"
+      "output", identifierFlag, "SSP2", ":title:", sep = "/"
     )
     cfg$info$flag2 <- preflag
 
@@ -163,7 +168,7 @@ for (bl in blV) {
         cfg$gms$c56_pollutant_prices <- paste0(g_formatted, "exp2110")
 
         ##############################################
-        cfg$title <- paste0("SSP2_BD00_BE", be_str, "_G", g_str, "demand_rev1")
+        cfg$title <- paste0("SSP2_", bl,"_",mp,"_BE", be_str, "_G", g_str, "demand_rev1")
 
         start_run(cfg, codeCheck = FALSE)
 
