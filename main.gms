@@ -153,10 +153,10 @@ $title magpie
 * Total number of cells: 200
 * 
 * Number of cells per region:
-*   AFR  CHA  CPA  EEU  FSU  LAM  MEA  NAM  PAO  PAS  SAS  WEU
-*    33   23    4    3   22   27   21   17   14   10   11   15
+*   CAZ  CHA  EUR  IND  JPN  LAM  MEA  NEU  OAS  REF  SSA  USA
+*    14   23   10    7    4   26   21    9   16   23   32   15
 * 
-* Regionscode: 5ff27be8
+* Regionscode: 62eff8f7
 *###################### R SECTION END (VERSION INFO) ###########################
 
 $offupper
