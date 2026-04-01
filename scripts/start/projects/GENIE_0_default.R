@@ -27,14 +27,27 @@ cfg$repositories <- append(list("https://rse.pik-potsdam.de/data/magpie/public" 
                                 "./patch_input" = NULL),
                            getOption("magpie_repos"))
 
+                           # Folder creation and SLURM queue settings.
+cfg$force_replace <- TRUE
+cfg$qos <- "priority"
+
+# Setting the time horizon to what we expect for MESSAGE: 2110.
+cfg$gms$c_timesteps <- "coup2110"
+
+
 cfg$input <- c(regional    = "rev4.119_26df900e_magpie.tgz",
                cellular    = "rev4.119_26df900e_1b5c3817_cellularmagpie_c200_MRI-ESM2-0-ssp245_lpjml-8e6c5eb1.tgz",
                validation  = "rev4.119_26df900e_validation.tgz",
-               additional  = "additional_data_rev4.62.tgz")
-               # patch       = "MMEmuR12_rev4.96.tgz")
+               additional  = "additional_data_rev4.62.tgz",
+               patch       = "SSP2_old.tgz")
 
 
 cfg$output <- c("output_check", "rds_report")
+
+# No GHG price
+cfg$gms$c56_pollutant_prices <- "G0000exp2110" # def = R34M410-SSP2-NPi2025, "G0000"
+cfg$gms$c56_pollutant_prices_noselect <- "G0000exp2110" # def = R34M410-SSP2-NPi2025, "G0000"
+
 
 # ### Identifier and folder
 # ###############################################
@@ -60,8 +73,8 @@ cfg$output <- c("output_check", "rds_report")
 
 ### Identifier and folder
 ###############################################
-identifierFlag <- "MESSAGEix"
-cfg$title <- "MESSAGE_default_SSP1"
+identifierFlag <- "MESSAGE_settings_test_SSP2"
+cfg$title <- "MESSAGE_settings_test_SSP2"
 ###############################################
 cfg$info$flag <- identifierFlag
 

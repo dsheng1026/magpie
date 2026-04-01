@@ -98,6 +98,7 @@ sets
       SSPDB-SSP5-45-REMIND-MAGPIE,
       SSPDB-SSP5-60-REMIND-MAGPIE,
       SSPDB-SSP5-Ref-REMIND-MAGPIE,
+      MESSAGE_SSP2_historical_BE,
       SSP2_BD00_BE00_G0000price_rev1,
       SSP2_BD00_BE05_G0000price_rev1,
       SSP2_BD00_BE07_G0000price_rev1,
@@ -105,7 +106,13 @@ sets
       SSP2_BD00_BE15_G0000price_rev1,
       SSP2_BD00_BE25_G0000price_rev1,
       SSP2_BD00_BE45_G0000price_rev1,
-      MESSAGE_SSP2_historical_BE /
+      SSP2_BD-high_BE00_G0000price_rev2,
+      SSP2_BD-high_BE05_G0000price_rev2,
+      SSP2_BD-high_BE07_G0000price_rev2,
+      SSP2_BD-high_BE10_G0000price_rev2,
+      SSP2_BD-high_BE15_G0000price_rev2,
+      SSP2_BD-high_BE25_G0000price_rev2,
+      SSP2_BD-high_BE45_G0000price_rev2 /
 
 ;
 *######################### R SECTION END (SETS) ################################
