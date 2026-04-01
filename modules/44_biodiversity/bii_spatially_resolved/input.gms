@@ -16,13 +16,13 @@ scalars
 
 table f44_bii_target(i,biome44) Spatially resolved BII target by region and biome (1)
 $ondelim
-$include "./modules/44_biodiversity/bii_spatially_resolved/input/f44_bii_target.csv"
+$ifi "%c44_use_spatially_resolved_bii_target%" == "1" $include "./modules/44_biodiversity/bii_spatially_resolved/input/f44_bii_target.csv"
 $offdelim
 ;
 
 table fm_bii_coeff(bii_class44,potnatveg) Biodiversity Intactness Index coefficients (unitless)
 $ondelim
-$ifi "%c44_use_spatially_resolved_bii_target%" == "1" $include "./modules/44_biodiversity/bii_spatially_resolved/input/f44_bii_target.csv"
+$include "./modules/44_biodiversity/bii_spatially_resolved/input/f44_bii_coeff.cs3"
 $offdelim
 ;
 
