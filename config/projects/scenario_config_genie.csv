@@ -4,7 +4,7 @@ gms$sm_fix_SSP2;2020
 gms$sm_fix_cc;2020
 gms$c13_tccost;high
 gms$c14_yields_scenario;nocc
-gms$food;anthropometrics_jan18
+gms$food;anthro_iso_jun22
 gms$kfo_rd;livst_rum,livst_milk
 gms$s15_food_subst_functional_form;2
 gms$c20_scp_type;hydrogen

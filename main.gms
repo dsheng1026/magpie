@@ -154,7 +154,7 @@ $title magpie
 * 
 * Number of cells per region:
 *   CAZ  CHA  EUR  IND  JPN  LAM  MEA  NEU  OAS  REF  SSA  USA
-*     5   19   12   12    7   33   25    8   16   12   33   18
+*    14   23   10    7    4   26   21    9   16   23   32   15
 * 
 * Regionscode: 62eff8f7
 *###################### R SECTION END (VERSION INFO) ###########################
@@ -179,7 +179,7 @@ $offlisting
 **************************MODEL SPECIFIC SCALARS********************************
 *                    Key parameters during model runs
 
-$setglobal c_timesteps  coup2100
+$setglobal c_timesteps  coup2110
 $setglobal c_past  till_2015
 $setglobal c_title  default
 
@@ -227,7 +227,7 @@ $setglobal transport  gtap_nov12
 $setglobal area_equipped_for_irrigation  endo_apr13
 $setglobal water_demand  all_sectors_aug13
 $setglobal water_availability  total_water_aug13
-$setglobal biodiversity  bii_target
+$setglobal biodiversity  bii_spatially_resolved
 $setglobal climate  static
 
 $setglobal nr_soil_budget  macceff_aug22

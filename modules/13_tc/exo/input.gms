@@ -53,7 +53,7 @@ $include "./modules/13_tc/input/fm_tau1995.cs4"
 $offdelim
 /;
 
-$setglobal c13_tccost  medium
+$setglobal c13_tccost  high
 
 table f13_tc_factor(t_all,scen13) Regression factor (USD17MER per ha)
 $ondelim

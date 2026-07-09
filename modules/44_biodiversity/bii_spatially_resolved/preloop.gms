@@ -14,6 +14,10 @@ i44_biome_share(j,biome44)$(sum(biome44_2, f44_biome_area(j,biome44_2)) > 0) =
 i44_biome_area_reg(i,biome44) = 
   sum((cell(i,j),land), pcm_land(j,land) * i44_biome_share(j,biome44));
 
+* Set spatially resolved BII target parameter from CSV table.
+* In bii_target, the scalar s44_bii_target is used directly in presolve.gms instead.
+i44_bii_target(i,biome44) = f44_bii_target(i,biome44);
+
 p44_bii_target(t,i,biome44) = 0;
 
 if (s44_start_year <= sm_fix_SSP2,

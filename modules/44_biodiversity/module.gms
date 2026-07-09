@@ -14,6 +14,7 @@
 *' @authors Patrick v. Jeetze, Florian Humpenöder
 
 *###################### R SECTION START (MODULETYPES) ##########################
+$Ifi "%biodiversity%" == "bii_spatially_resolved" $include "./modules/44_biodiversity/bii_spatially_resolved/realization.gms"
 $Ifi "%biodiversity%" == "bii_target" $include "./modules/44_biodiversity/bii_target/realization.gms"
 $Ifi "%biodiversity%" == "bv_btc_mar21" $include "./modules/44_biodiversity/bv_btc_mar21/realization.gms"
 *###################### R SECTION END (MODULETYPES) ############################

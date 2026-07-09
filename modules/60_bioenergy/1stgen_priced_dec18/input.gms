@@ -35,11 +35,11 @@ sets
 
 scalars
   c60_biodem_level  bioenergy demand level indicator 1 for regional and 0 for global demand   (1)   / 1 /
-  s60_bioenergy_1st_subsidy first generation bioenergy subsidy (USD17MER per GJ) / 6.5 /
-  s60_2ndgen_bioenergy_dem_min Minimum dedicated 2nd generation bioenergy demand assumed in each region (mio. GJ per yr) / 1 /
+  s60_bioenergy_1st_subsidy first generation bioenergy subsidy (USD17MER per GJ) / 0 /
+  s60_2ndgen_bioenergy_dem_min Minimum dedicated 2nd generation bioenergy demand assumed in each region (mio. GJ per yr) / 0 /
 ;
 
-$setglobal c60_2ndgen_biodem  R34M410-SSP2-NPi2025
+$setglobal c60_2ndgen_biodem  SSP2_BD-high_BE45_G0000price_rev2
 $setglobal c60_2ndgen_biodem_noselect  R34M410-SSP2-NPi2025
 
 
