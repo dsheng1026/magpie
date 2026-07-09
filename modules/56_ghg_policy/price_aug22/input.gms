@@ -81,8 +81,8 @@ scalars
   s56_fader_cpriceaff_end         End year of C price induced afforestation fade-in (1) / 2030 /
 ;
 
-$setglobal c56_pollutant_prices  G4000exp2110
-$setglobal c56_pollutant_prices_noselect  G0000exp2110
+$setglobal c56_pollutant_prices  R34M410-SSP2-NPi2025
+$setglobal c56_pollutant_prices_noselect  R34M410-SSP2-NPi2025
 $setglobal c56_emis_policy  reddnatveg_nosoil
 $setglobal c56_cprice_aff  secdforest_vegc
 $setglobal c56_mute_ghgprices_until  y2030
