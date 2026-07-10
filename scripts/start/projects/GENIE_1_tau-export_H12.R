@@ -23,15 +23,15 @@ source("scripts/start_functions.R") #nolinter
 # Source the default config and then over-write it before starting the run.
 source("config/default.cfg") #nolinter
 
-cfg$repositories <- append(list("https://rse.pik-potsdam.de/data/magpie/public" = NULL,
-                                "./patch_input" = NULL),
-                           getOption("magpie_repos"))
+# cfg$repositories <- append(list("https://rse.pik-potsdam.de/data/magpie/public" = NULL,
+#                                 "./patch_input" = NULL),
+#                            getOption("magpie_repos"))
 
-cfg$input <- c(regional    = "rev4.119_26df900e_magpie.tgz",
-               cellular    = "rev4.119_26df900e_1b5c3817_cellularmagpie_c200_MRI-ESM2-0-ssp245_lpjml-8e6c5eb1.tgz",
-               validation  = "rev4.119_26df900e_validation.tgz",
-               additional  = "additional_data_rev4.62.tgz")
-               # patch       = "MMEmuR12_rev4.96.tgz")
+# cfg$input <- c(regional    = "rev4.119_26df900e_magpie.tgz",
+#                cellular    = "rev4.119_26df900e_1b5c3817_cellularmagpie_c200_MRI-ESM2-0-ssp245_lpjml-8e6c5eb1.tgz",
+#                validation  = "rev4.119_26df900e_validation.tgz",
+#                additional  = "additional_data_rev4.62.tgz")
+#                # patch       = "MMEmuR12_rev4.96.tgz")
 
 
 cfg$output <- c("output_check", "rds_report")
@@ -39,15 +39,15 @@ cfg$output <- c("output_check", "rds_report")
 # preset <-  "GENIE_SCP"
 # cfg <- setScenario(cfg, c(preset)) #load config presets
 cfg <- setScenario(cfg, "SSP2")
-cfg <- setScenario(cfg, c(preset), scenario_config = "config/projects/scenario_config_genie.csv")
+# cfg <- setScenario(cfg, "GENIE_SCP", scenario_config = "config/projects/scenario_config_genie.csv")
 
 cfg$force_replace <- FALSE
 cfg$qos <- "priority"
 
 ### Identifier and folder
 ###############################################
-identifierFlag <- "SCP_24_02_29"
-cfg$title <- "Default_rev4.96-preset"
+identifierFlag <- "Default_MAgPIE_regions_test"
+cfg$title <- "SSP2_tau"
 ###############################################
 
 cfg$info$flag <- identifierFlag

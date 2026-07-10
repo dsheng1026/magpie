@@ -27,58 +27,74 @@ cfg$repositories <- append(list("https://rse.pik-potsdam.de/data/magpie/public" 
                                 "./patch_input" = NULL),
                            getOption("magpie_repos"))
 
-                           # Folder creation and SLURM queue settings.
-cfg$force_replace <- TRUE
-cfg$qos <- "priority"
-
-# Setting the time horizon to what we expect for MESSAGE: 2110.
-cfg$gms$c_timesteps <- "coup2110"
-
-
 cfg$input <- c(regional    = "rev4.119_26df900e_magpie.tgz",
                cellular    = "rev4.119_26df900e_1b5c3817_cellularmagpie_c200_MRI-ESM2-0-ssp245_lpjml-8e6c5eb1.tgz",
                validation  = "rev4.119_26df900e_validation.tgz",
-               additional  = "additional_data_rev4.62.tgz",
-               patch       = "SSP2_old.tgz")
+               additional  = "additional_data_rev4.62.tgz")
+               # patch       = "MMEmuR12_rev4.96.tgz")
 
 
 cfg$output <- c("output_check", "rds_report")
 
-# No GHG price
-cfg$gms$c56_pollutant_prices <- "G0000exp2110" # def = R34M410-SSP2-NPi2025, "G0000"
-cfg$gms$c56_pollutant_prices_noselect <- "G0000exp2110" # def = R34M410-SSP2-NPi2025, "G0000"
-
-
 # ### Identifier and folder
 # ###############################################
 # identifierFlag <- "MESSAGEix"
-# cfg$title <- "MESSAGE_default_rev4.119_without_GENIE_presets"
+# cfg$title <- "MESSAGE_default_rev4.119_with_default.cfg"
 # ###############################################
 # cfg$info$flag <- identifierFlag
-
 # start_run(cfg, codeCheck = FALSE)
 
-# #load GENIE config presets, write it before starting the run.
-# # cfg <- setScenario(cfg, "SSP2")
-# preset <-  "GENIE_SCP"
-# cfg <- setScenario(cfg, c(preset), scenario_config = "config/projects/scenario_config_genie.csv")
+### Folder
+###############################################
+cfg$title <- "13tccost"
+###############################################
+cfg$gms$c13_tccost <- "high"
+start_run(cfg, codeCheck = FALSE)
 
+### Folder
+###############################################
+cfg$title <- "13tccost+14yields"
+###############################################
+# source("config/default.cfg") #nolinter
+cfg$gms$c14_yields_scenario  <- "nocc"
+start_run(cfg, codeCheck = FALSE)
+
+### Folder
+###############################################
+cfg$title <- "13tccost+14yields+30growth"
+###############################################
+# source("config/default.cfg") #nolinter
+cfg$gms$s30_annual_max_growth <- 0.02
+start_run(cfg, codeCheck = FALSE)
+
+### Folder
+###############################################
+cfg$title <- "13tccost+14yields+30growth+32hvarea"
+###############################################
+# source("config/default.cfg") #nolinter
+cfg$gms$s32_hvarea <- 0
+start_run(cfg, codeCheck = FALSE)
+
+### Folder
+###############################################
+cfg$title <- "13tccost+14yields+30growth+32hvarea+35hvarea"
+###############################################
+# source("config/default.cfg") #nolinter
+cfg$gms$s35_hvarea <- 0
+start_run(cfg, codeCheck = FALSE)
+
+### Folder
+###############################################
+cfg$title <- "13tccost+14yields+30growth+32hvarea+35hvarea+73timber"
+###############################################
+# source("config/default.cfg") #nolinter
+cfg$gms$s73_timber_demand_switch <- 0
+start_run(cfg, codeCheck = FALSE)
+
+# # Template to add new settings:
 # ### Folder
 # ###############################################
-# cfg$title <- "MESSAGE_default_rev4.119_with_GENIE_presets"
+# cfg$title <- "MESSAGE_default_rev4.119_with_"
 # ###############################################
 
-# ##########################################################
 # start_run(cfg, codeCheck = FALSE)
-
-### Identifier and folder
-###############################################
-identifierFlag <- "MESSAGE_settings_test_SSP2"
-cfg$title <- "MESSAGE_settings_test_SSP2"
-###############################################
-cfg$info$flag <- identifierFlag
-
-# 
-cfg <- setScenario(cfg, "SSP2")
-
-start_run(cfg, codeCheck = FALSE)
