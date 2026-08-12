@@ -1,3 +1,18 @@
+# |  (C) 2008-2025 Potsdam Institute for Climate Impact Research (PIK)
+# |  authors, and contributors see CITATION.cff file. This file is part
+# |  of MAgPIE and licensed under AGPL-3.0-or-later. Under Section 7 of
+# |  AGPL-3.0, you are granted additional permissions described in the
+# |  MAgPIE License Exception, version 1.0 (see LICENSE file).
+# |  Contact: magpie@pik-potsdam.de
+
+# ----------------------------------------------------------
+# description: GENIE project MESSAGE-MAgPIE Emulator - Step 2 - generate price-driven biomass demands
+# ----------------------------------------------------------
+
+######################################
+#### Script to start a MAgPIE run ####
+######################################
+
 library(lucode2)
 library(magclass)
 library(gms)
@@ -27,26 +42,17 @@ ssp_flag <- "SSP2"
 
 cfg$input <- c(regional    = "rev4.119_5ff27be8_magpie.tgz",
                cellular    = "rev4.119_5ff27be8_1b5c3817_cellularmagpie_c200_MRI-ESM2-0-ssp245_lpjml-8e6c5eb1.tgz",
-            #    cellular    = "rev4.119_5ff27be8_fd712c0b_cellularmagpie_c200_MRI-ESM2-0-ssp370_lpjml-8e6c5eb1.tgz",
                validation  = "rev4.119_5ff27be8_validation.tgz",
                additional  = "additional_data_rev4.62.tgz",
-              #  patch       = "SSP2.tgz"
-               patch       = "SSP2_old.tgz")
-
-# # which input data sets should be used?
-# cfg$input <- c(regional    = "rev4.87_26df900e_magpie.tgz",
-#                cellular    = "rev4.87_26df900e_fd712c0b_cellularmagpie_c200_MRI-ESM2-0-ssp370_lpjml-8e6c5eb1.tgz",
-#                validation  = "rev4.87_26df900e_validation.tgz",
-#                additional  = "additional_data_rev4.62.tgz",
-#            patch = "SSP2_old.tgz")
+               patch       = "SSP2_price.tgz")
 
 
 cfg$output <- c("output_check", "rds_report")
 
 ### Identifier and folder
 ###############################################
-identifierFlag <- "Matrix_MESSAGE_historical_BE_rev3"
-cfg$title <- "MESSAGE_historical_2-gen_BE_data"
+identifierFlag <- "MESSAGEix_5ff27be8"
+cfg$title <- "SSP2_price"
 ###############################################
 
 # Set the identifier flag for shiny app, and output folder.
@@ -56,62 +62,38 @@ cfg$results_folder <- paste0("output/", identifierFlag, "/:title:")
 # Set the SSP scenario in the scenario_config.csv file to SSP1.
 cfg <- setScenario(cfg, "SSP2")
 
-# # Recalculate NPI/NDC switch
-# cfg$recalc_npi_ndc <- TRUE
-
-# # Recalculate land conversion cost
-# cfg$recalibrate_landconversion_cost <- TRUE
-
 # Cost of technological change
 cfg$gms$c13_tccost <- "high"
 
 # Yields scenario should not reflect climate change
 cfg$gms$c14_yields_scenario  <- "nocc"
 
-# # Year at which land conservation is reached
-# cfg$gms$s22_conservation_target <- 2035
-
-# # Updating SNV policy parameters: decreasing start year from 2050 to 2035
-# cfg$gms$s29_snv_scenario_target <- 2035
-
-# # Forestry and pasture are also added to SNV policy land types
-# cfg$gms$land_snv <- "secdforest, forestry, past, other"
 
 # Capping the annual max cropland growth per year per region, relative to current level
 cfg$gms$s30_annual_max_growth <- 0.02
 
-# # No harvesting or establishment of new plantations
-# cfg$gms$s32_hvarea <- 0
-
-# # No timber production from natveg
-# cfg$gms$s35_hvarea <- 0
 
 ### Cost of missing BII set to 10 million USD rather than 1 million as in default.cfg
 cfg$gms$s44_cost_bii_missing <- 10000000
 
 # No GHG price
-cfg$gms$c56_pollutant_prices <- "G0000exp2110" # def = R34M410-SSP2-NPi2025, "G0000"
-cfg$gms$c56_pollutant_prices_noselect <- "G0000exp2110" # def = R34M410-SSP2-NPi2025, "G0000"
-
-# # Bioenergy production settings:
-# cfg$gms$c60_1stgen_biodem <- "phaseout2020"
-# cfg$gms$c60_2ndgen_biodem <- "MESSAGE_SSP2_historical_BE" # def = R34M410-SSP2-NPi2025
-# cfg$gms$c60_2ndgen_biodem_noselect <- "MESSAGE_SSP2_historical_BE" # def = R34M410-SSP2-NPi2025
+cfg$gms$c56_pollutant_prices <- "SSPDB-SSP2-Ref-MESSAGE-GLOBIOM" # def = R34M410-SSP2-NPi2025, here we need 0 across all regions and periods
+cfg$gms$c56_pollutant_prices_noselect <- "SSPDB-SSP2-Ref-MESSAGE-GLOBIOM" # def = R34M410-SSP2-NPi2025, here we need 0 across all regions and periods
 
 
 # ### BE
 cfg$gms$s60_2ndgen_bioenergy_dem_min <- 0
 cfg$gms$s60_bioenergy_1st_subsidy <- 0
 # BE price incentive 0, 5, 7, 10, 15, 25, 45 2005USD/GJ, but in MAgPIE 2017 USD is used, so scale by 1.23  
-beV <- c(0, 5, 7, 10, 15, 25, 45) * 1.23 
+beV <- c(0, 5, 7, 10, 15, 25, 45) # for folder naming, don't scale; for the value used in optimization, scale
 
 ### Tau / Yield
 cfg$gms$tc <- "exo"
 
 ### Biodiv
-blV <- c(0, 0.78) # Options: 0, 0.7, 0.74, 0.78
+blV <- c(0) # Options: 0, 0.7, 0.74, 0.78
 
-### Food
+### Microbiol protein (MP) Food
 mpV <- c(0) # Options: 0, 25, 50, 75
 
 
@@ -123,7 +105,7 @@ for (bl in blV) {
     pa <- "none"
   }
 
-  cfg$gms$c44_bii_decrease <- bd # don't allow bii to decrease
+  cfg$gms$c44_bii_decrease <- bd 
   cfg$gms$s44_bii_target <- bl
   cfg$gms$c22_protect_scenario <- pa
 
@@ -133,14 +115,13 @@ for (bl in blV) {
     cfg$info$flag2 <- preflag
 
     cfg$gms$s15_rumdairy_scp_substitution <- mp / 100
-
+# BE price incentive 0, 5, 7, 10, 15, 25, 45 2005USD/GJ, but in MAgPIE 2017 USD is used, so scale by 1.23  
     for (be in beV) {
-      cfg$gms$s60_bioenergy_1st_price <- be
-      cfg$gms$s60_bioenergy_2nd_price <- be
+      cfg$gms$s60_bioenergy_1st_price <- be * 1.23
+      cfg$gms$s60_bioenergy_2nd_price <- be * 1.23
 
       ##############################################
-      runflag <- "price"
-      cfg$title <- paste0(preflag, "_BE", str_pad(be, 2, pad = "0"), "_G0000", runflag, "_rev1")
+      cfg$title <- paste0(preflag, "_BE", str_pad(be, 2, pad = "0"), "_G0000", "price")
 
       start_run(cfg, codeCheck = FALSE)
 
