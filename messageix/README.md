@@ -26,6 +26,12 @@ and named with a content hash so regeneration is never a silent no-op.
 Runs happen on the PIK cluster: roughly 1 GB per run, ~90 GB for a full
 emulator generation.
 
+> Note: upstream MAgPIE's root `.gitignore` matches `*.cs*`, which catches CSV files
+> under `messageix/` too. The tracked preset CSV is unaffected, but a NEW `.csv` or
+> `.cs3` file added under `messageix/` must be staged with `git add -f`. The
+> `.gitignore` itself stays untouched — no path outside `messageix/` differs from
+> upstream.
+
 ## Layout
 
 - `R/` — shared layer: config resolution, the naming contract, logging, execution environment, run assertions
