@@ -6,6 +6,10 @@ This overlay consolidates the MESSAGE–MAgPIE linkage into one place: a
 reproducible path from the pinned MAgPIE version (tag `v4.11.0`, branch
 `iiasa-4.11.0`) to the land-use emulator matrix MESSAGEix consumes.
 
+Everything the linkage adds lives under `messageix/`. **No path outside this
+folder differs from upstream `magpiemodel/magpie`** — merging a newer PIK tag is
+clean by construction.
+
 ## Pipeline
 
 1. **Reference tau** — one run calibrated against BAU second-generation bioenergy demand; exports the tau trajectory
@@ -16,16 +20,32 @@ reproducible path from the pinned MAgPIE version (tag `v4.11.0`, branch
 6. **Matrix generation** — 84 report.mif via MM_linkage_mapping.csv, plus woodfuel from fulldata.gdx
 
 Patch tarballs are MAgPIE's project-override mechanism (selective overrides on
-top of the version-pinned base input tarball), generated fresh on a first run.
+top of the version-pinned base input tarball), generated fresh on a first run
+and named with a content hash so regeneration is never a silent no-op.
+
+Runs happen on the PIK cluster: roughly 1 GB per run, ~90 GB for a full
+emulator generation.
 
 ## Layout
 
-- `inputs/` — input tarball signpost (how to obtain and place the pinned R12 tarball)
-- `start/` — parameterised pipeline start scripts
-- `patches/` — patch-tarball generators
-- `emulator/` — matrix generation, merged from dsheng1026/MAgPIE_emulator
-- `presets/` — scenario configuration, one column per narrative
-- `docs/` — pipeline science documentation
+- `R/` — shared layer: config resolution, the naming contract, logging, execution environment, run assertions
+- `start/` — the three stage drivers (tau, price-driven, demand-driven) and the shared runner
+- `patches/` — patch-tarball generators for steps 1.5 and 2.5
+- `emulator/` — matrix generation and woodfuel post-processing, merged from dsheng1026/MAgPIE_emulator
+- `presets/` — scenario configuration, one column per narrative; `default` reproduces the golden runs
+- `inputs/` — input tarball signpost: how to obtain and place the pinned R12 tarball
+- `docs/` — `pipeline.md` (the science), `decisions.md` (why it is built this way, and what is open)
+
+Start here: `docs/pipeline.md` for what the pipeline computes, `inputs/README.md`
+for what you need before you can run it.
+
+## Running MAgPIE mutates tracked files
+
+`core/sets.gms`, `main.gms` and every module `input.gms`/`sets.gms` are
+regenerated from `cfg$input` and `cfg$gms` on every run. **A dirty working tree
+after a run is normal, and those files are never committed** — the region set
+travels in the input tarball and the configuration travels in
+`presets/scenario_config.csv`. See `docs/decisions.md`, Q9.
 
 ## Attribution
 

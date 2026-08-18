@@ -1,0 +1,151 @@
+# Input tarballs — signpost
+
+**This directory holds no data.** It documents which MAgPIE input tarballs the pipeline needs,
+how MAgPIE finds them, and where to get them. The tarballs are not currently redistributable
+(see `../docs/decisions.md`, Q6).
+
+---
+
+## What the pipeline needs
+
+MAgPIE reads all input data from version- and region-specific tarballs named in `cfg$input`.
+The pipeline pins MAgPIE **v4.11.0** and the **MESSAGE R12** region set, regionscode
+**`5ff27be8`**, input revision **rev4.119**:
+
+| `cfg$input` entry | Filename |
+| --- | --- |
+| `regional` | `rev4.119_5ff27be8_magpie.tgz` |
+| `cellular` | `rev4.119_5ff27be8_1b5c3817_cellularmagpie_c200_MRI-ESM2-0-ssp245_lpjml-8e6c5eb1.tgz` |
+| `validation` | `rev4.119_5ff27be8_validation.tgz` |
+| `additional` | `additional_data_rev4.62.tgz` |
+| `patch` | generated — see below |
+
+The `cellular` name encodes more than the region set: `1b5c3817` is the cellular data hash,
+`c200` the cluster count, `MRI-ESM2-0-ssp245` the climate forcing, and `lpjml-8e6c5eb1` the
+LPJmL run. An SSP change means a different cellular tarball, not just a different `setScenario`
+column.
+
+Two entries need confirmation before the first production run. The golden runs used
+`additional_data_rev4.62.tgz` where v4.11.0 defaults to `rev4.63`, and carried **no**
+`calibration` entry at all where the MAgPIE default ships `calibration_H12_FAO_13Mar25.tgz`.
+Whether the updated R12 set ships `rev4.63` and a matching R12 calibration tarball is an open
+question for Di Sheng.
+
+The names live in `../presets/scenario_config.csv`, not in code. Nothing here needs editing to
+change them.
+
+---
+
+## `5ff27be8` — the regionscode, and why no region file is committed
+
+`5ff27be8` is the hash MAgPIE assigns to the MESSAGE R12 region mapping
+(`AFR CHA CPA EEU FSU LAM MEA NAM PAO PAS SAS WEU`). Upstream's default H12 mapping hashes to
+`62eff8f7`.
+
+**The R12 region set is delivered by the tarball. It is never delivered by a committed file.**
+`scripts/start_functions.R` rebuilds `core/sets.gms` — the sets `h`, `i`, `supreg`, `iso`, `j`,
+`cell`, `i_to_iso` — from the `map` object inside the tarball's own `input/spatial_header.rda`
+on every input download, and rewrites the `Regionscode:` line in `main.gms` from the same
+source. `core/sets.gms` carries a "DO NOT MODIFY, WILL BE LOST" banner and `/input/` is
+gitignored.
+
+So: **do not commit `core/sets.gms`, `main.gms`, or any module `input.gms`/`sets.gms`.** A run
+rewrites them; a dirty working tree after a run is normal MAgPIE behaviour. Changing the region
+set means changing `cfg$input` in the preset, nothing else. This is also PIK's own pattern —
+`scripts/start/projects/project_sim4nexus.R` composes tarball names from a region-mapping →
+regionscode lookup.
+
+If the region set changes on a tree that has already run, set `cfg$force_download <- TRUE`:
+MAgPIE decides whether to re-extract by comparing tarball **filenames** against
+`input/info.txt`, so it will otherwise keep the old data. A fresh clone has no `info.txt` and
+downloads regardless.
+
+---
+
+## Where the tarballs are
+
+**Currently: Di Sheng's shared drive and the PIK cluster. Ask Di Sheng for the exact paths and
+for access** — they are not recorded here yet, and the tarballs are private within IIASA.
+
+Also worth confirming with Di when you ask: whether the R12 set is reachable through a
+`cfg$repositories` entry on the PIK cluster or has to be placed by hand, and whether the older
+R12 patch `MMEmuR12_rev4.96.tgz` is now fully redundant (it is commented out in every pipeline
+start script, which suggests yes).
+
+Longer term: an IIASA-wide model-data share is under consideration; public hosting is a
+team-leader decision, with a public archive release covering MESSAGE R12, R10, India and China
+variants as the fallback if the MAgPIE repository cannot host the data. The repository would
+then pin to that release.
+
+---
+
+## How MAgPIE finds them — `cfg$repositories`
+
+`gms::download_distribute()` searches `cfg$repositories` **in order** and takes the first hit
+for each filename. The pipeline sets:
+
+```r
+cfg$repositories <- append(
+  list("https://rse.pik-potsdam.de/data/magpie/public" = NULL,   # PIK public repository
+       "./patch_input"                                 = NULL),  # generated patches, local
+  getOption("magpie_repos"))                                     # site defaults, incl. PIK cluster paths
+```
+
+`getOption("magpie_repos")` carries whatever the local R environment provides — on the PIK
+cluster that includes the internal data paths. The repository list is a configurable
+environment setting (`../R/utils_env.R`), so a site with the tarballs somewhere else adds an
+entry rather than editing code.
+
+To place a tarball by hand, put it in a directory and add that directory to `cfg$repositories`.
+Do **not** unpack it: `download_distribute()` extracts each archive flat and routes every file
+to the module `input/` folder whose `input/files` manifest claims it, with unclaimed files
+going to `input/`.
+
+---
+
+## `patch_input/` — generated patch tarballs
+
+A "patch" in MAgPIE terms is a project-specific selective override of base inputs, not a
+software patch. It is a plain `.tgz` containing **bare filenames at the archive root, no
+directory structure**, listed **last** in `cfg$input` so it overwrites earlier entries.
+
+The pipeline generates the step-2 patch and the `f60` half of the step-3 patch; nothing is
+hand-assembled inside the repository:
+
+| Consumed by | Contents | Generator |
+| --- | --- | --- |
+| Step 2 (price-driven) | `f13_tau_scenario.csv` — the reference tau trajectory from step 1 | `../patches/build_step2_patch.R` |
+| Step 3 (demand-driven) | `f60_bioenergy_dem.cs3` with seven new bioenergy demand columns; `f56_pollutant_prices.cs3` with twelve GHG price trajectory columns **supplied by the caller** (`--f56=PATH`) — no generator for it exists yet, see `../docs/decisions.md`, Open items | `../patches/build_step3_patch.R` |
+
+They are written to `patch_input/` at the repository root — a directory that does not exist in
+a fresh clone and that the generators create. Generated patches are build artefacts and are
+never committed.
+
+**Patch filenames carry a content hash** (`<preset>_<stage>_<8hex>.tgz`). MAgPIE decides
+whether to re-extract by comparing filenames, not contents, so reusing a name with new contents
+is a silent no-op that leaves the run on stale data. Content-hashed names make regeneration
+correct and re-use safe, and the drivers assert the result: after `start_run()` returns for the
+first run of a stage, `input/info.txt` must name that stage's patch tarball.
+
+No `SSP2_tau.tgz` is consumed anywhere. It existed only to patch a base tarball that was stale
+relative to the MAgPIE version being run; a correctly updated tarball makes it redundant.
+
+---
+
+## Future: the version × region matrix
+
+An input tarball is specific to a MAgPIE version — code and module structure change across
+releases — **and** to a region resolution, because it encodes the cell-to-region mapping. The
+full picture is a matrix of MAgPIE version × region set. This pipeline pins exactly one cell of
+it: **v4.11.0 × R12**.
+
+Adding a cell means: obtain the matching tarball set, add a preset column naming it, regenerate
+the reference tau (step 1), and rerun validation. No pipeline code changes. The first intended
+move is the version axis — v4.14.0 — which doubles as the first exercise of the upstream-merge
+path.
+
+**Cell-level aggregation is the other axis, and it is not built.** The intended path is to
+accept cell-level MAgPIE input and aggregate to a custom region set at run time rather than
+depending on a pre-built tarball per region set. That is the door to country-level work
+(R10, India, China). Recorded here as the design direction; nothing in the repository
+implements it yet.
