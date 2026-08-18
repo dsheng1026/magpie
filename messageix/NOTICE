@@ -1,0 +1,24 @@
+NOTICE — messageix/ overlay
+
+Upstream project
+  MAgPIE — Model of Agricultural Production and its Impact on the Environment
+  Potsdam Institute for Climate Impact Research (PIK)
+  https://github.com/magpiemodel/magpie
+  License: AGPL-3.0-or-later with the MAgPIE License Exception.
+  This branch (iiasa-4.11.0) is based on upstream tag v4.11.0. PIK's LICENSE
+  and CITATION.cff are inherited unchanged.
+
+What this overlay adds
+  The MAgPIE -> MESSAGEix land-use emulator pipeline: parameterised start
+  scripts for the three run stages (reference tau, price-driven, demand-driven),
+  patch-tarball generators, matrix generation including woodfuel
+  post-processing, scenario presets, and pipeline documentation. Everything
+  lives under messageix/; the upstream model tree is unmodified except for
+  deltas documented in messageix/docs/.
+
+Authorship
+  Scientific authorship of the pipeline: Di Sheng (IIASA). The emulator code
+  was developed in https://github.com/dsheng1026/MAgPIE_emulator and is merged
+  here with its commit history preserved. The woodfuel extraction builds on
+  code by Kristine Karstens (PIK). Repository packaging and consolidation:
+  Setu Pelz (IIASA ECE).
