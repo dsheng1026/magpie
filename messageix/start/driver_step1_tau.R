@@ -1,37 +1,20 @@
 # |  Stage 1 of the MAgPIE -> MESSAGEix emulator pipeline: the reference tau run.
 # |
-# |  WHAT THIS RUN IS. One MAgPIE run with technological change endogenous
-# |  (cfg$gms$tc left at endo_jan22), calibrated against the BAU second-generation
-# |  bioenergy demand path named by pipeline$biodem_scenario_step1 and under the
-# |  land protection scenario pipeline$protect_scenario_step1. Its product is not
-# |  a scenario result. It is the land-use intensity trajectory tau, which the
-# |  seven stage-2 runs then impose exogenously so that they differ from one
-# |  another only in the bioenergy price.
+# |  One MAgPIE run, and what it is for is not its scenario result. It is tau,
+# |  the trajectory of land-use intensity -- roughly, how much yield each region
+# |  gets per hectare over time. Technological change is solved for here rather
+# |  than imposed, which is what makes the trajectory meaningful; the seven
+# |  stage-2 runs then hold tau fixed at it, so they differ from one another only
+# |  in the bioenergy price. The run is made under the narrative's stage-1
+# |  protection scenario and against its business-as-usual second-generation
+# |  bioenergy demand path.
 # |
-# |  WHERE TAU LANDS. In the run folder's fulldata.gdx, as the variable ov_tau
-# |  (t, h, tautype, type); the level of that variable is the trajectory.
+# |  Tau lands in the run folder's fulldata.gdx, in the variable ov_tau
+# |  (t, h, tautype, type); the "level" slice is the trajectory. patch_step2 is
+# |  the only thing that reads this run.
 # |
-# |  WHAT CONSUMES IT. Step 1.5, messageix/patches/build_step2_patch.R, reads
-# |  ov_tau out of this run's fulldata.gdx, writes it as f13_tau_scenario.csv,
-# |  and packs it into the content-hashed tarball that stage 2 loads as its patch
-# |  input. Nothing else in the pipeline reads this run.
-# |
-# |  NO PATCH TARBALL. Stage 1 needs none: the pinned R12 tarball set in
-# |  messageix/inputs/ carries every input it reads.
-# |
-# |  ONE REFERENCE TAU PER SET OF STAGE-1 SETTINGS. The run folder is shared
-# |  across narratives, so this run records the settings it solved under
-# |  (messageix_stage1_fingerprint.txt) and the step-1.5 generator refuses to
-# |  extract tau from a run another preset produced.
-# |
-# |  WHY THIS RUN'S SETTINGS DIFFER FROM STAGES 2 AND 3. It runs land protection
-# |  "BH" against their "none", c44_bii_decrease 0 against their 1, and leaves
-# |  s30_annual_max_growth, s44_cost_bii_missing, the s60_* bioenergy switches and
-# |  every c56_* GHG price switch at MAgPIE's defaults -- so it runs under an NPi
-# |  carbon price with the default non-CO2 cap of 4920 USD17MER/tC. That
-# |  asymmetry is deliberate and is enforced in messageix/R/utils_config.R, not
-# |  here: capping or re-scenarioing this run would move the tau trajectory that
-# |  the whole pipeline rests on.
+# |  It needs no patch tarball: the input tarballs described in messageix/inputs/
+# |  carry every input it reads.
 # |
 # |  Usage, from the MAgPIE model root:
 # |    Rscript messageix/start/driver_step1_tau.R                  # run it
@@ -49,12 +32,15 @@ main <- function() {
     stage    = 1,
     headline = "stage 1 - reference tau",
     notes    = c(
-      "technological change" = "endogenous (endo_jan22): exporting the tau trajectory is the point of the run",
-      "artefact"             = "ov_tau (level) in fulldata.gdx",
-      "consumed by"          = "messageix/patches/build_step2_patch.R -> f13_tau_scenario.csv",
+      "technological change" = "solved for, not imposed (endo_jan22): the tau trajectory is what this run is for",
+      "what it produces"     = "ov_tau (level) in fulldata.gdx",
+      "read by"              = "patch_step2 (messageix/patches/build_step2_patch.R) -> f13_tau_scenario.csv",
       "patch tarball"        = "none: stage 1 runs on the base input tarballs alone"
     )
   )
 }
 
-if (!interactive()) main()
+# Only when this file is the command being run, so that sourcing it for one of
+# its functions does not start a sweep. Every entry point of the pipeline uses
+# this same guard.
+if (invoked_directly("driver_step1_tau.R")) main()

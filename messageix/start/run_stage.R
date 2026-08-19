@@ -9,7 +9,7 @@
 # |
 # |  A run set is not written down anywhere. It is derived from the preset:
 # |    stage 1  one reference run
-# |    stage 2  one run per pipeline$be_prices level
+# |    stage 2  one run per be_prices level
 # |    stage 3  one run per (be_prices x ghg_prices) pair, bioenergy price outer
 # |  expected_run_folders() in utils_paths.R builds that grid, and the drivers
 # |  submit it in the order it returns.
@@ -21,22 +21,25 @@
 # |      Rscript messageix/start/driver_step3_demand.R [flags]
 # |
 # |  Flags, shared by all three drivers:
-# |    --preset=NAME   narrative column of the preset CSV      (default: default)
-# |    --csv=PATH      preset CSV                              (default: messageix/presets/scenario_config.csv)
+# |    --preset=NAME   narrative column of the narratives file      (default: default)
+# |    --csv=PATH      narratives file                              (default: messageix/presets/narratives.csv)
 # |    --patch=NAME    patch tarball in the patch repository   (stages 2 and 3; default: discovered)
 # |    --list          print the run set and stop
 # |    --validate      resolve the config, print the assembled cfg deltas, stop
 # |    --dry-run       do everything except call start_run()
 # |    --help          print usage and stop
-# |  An unrecognised flag, a positional argument, or a repeated flag stops the
-# |  run: a mistyped sweep is cheaper to catch here than 84 runs later.
+# |  Every option is accepted as --key=value and as --key value. An unrecognised
+# |  flag, a positional argument, or a repeated flag stops the run: a mistyped
+# |  sweep is cheaper to catch here than 84 runs later.
 # |
 # |  Patch tarballs are generated artefacts with content-hashed names
 # |  (utils_paths.R). A driver never invents one. It takes --patch=NAME, or finds
 # |  the single "<preset>_<stage>_<8 hex>.tgz" in the patch repository. Several
 # |  candidates mean several generator outputs are on disk and the driver cannot
 # |  know which is current, so it stops and asks -- picking the newest would
-# |  silently pair a run with the wrong inputs.
+# |  silently pair a run with the wrong inputs. The pipeline driver passes
+# |  --patch=NAME for exactly this reason: a stage it runs reads the tarball the
+# |  generator before it just built, whatever else is in the directory.
 # |
 # |  Interface
 # |    run_stage(pcfg, stage, be, ghg, dry_run)   -> invisible(cfg); one MAgPIE run
@@ -51,13 +54,11 @@
 # |  Dependencies: base R, the messageix/R/ layer, and MAgPIE's
 # |  scripts/start_functions.R. No CRAN packages beyond what MAgPIE itself needs.
 
-if (!exists("log_die", mode = "function"))            source("messageix/R/utils_log.R")
-if (!exists("assert_magpie_root", mode = "function")) source("messageix/R/utils_env.R")
+# One line loads the whole messageix/R/ layer: each file there loads the files it
+# needs itself, and utils_runs.R sits at the bottom of that chain.
+if (!exists("run_modelstat", mode = "function")) source("messageix/R/utils_runs.R")
 assert_magpie_root()
-if (!exists("run_title", mode = "function"))          source("messageix/R/utils_paths.R")
-if (!exists("stage_cfg", mode = "function"))          source("messageix/R/utils_config.R")
-if (!exists("run_modelstat", mode = "function"))      source("messageix/R/utils_runs.R")
-if (!exists("start_run", mode = "function"))          source("scripts/start_functions.R")
+if (!exists("start_run", mode = "function"))     source("scripts/start_functions.R")
 
 # ---- one run ----------------------------------------------------------------
 
@@ -71,11 +72,12 @@ if (!exists("start_run", mode = "function"))          source("scripts/start_func
 #   first    TRUE for the first run of a stage, which is the one whose inputs are
 #            checked against input/info.txt after start_run() returns
 #
-# codeCheck = FALSE skips MAgPIE's GAMS source consistency check. It inspects
-# model code, which is identical across every run of a sweep, so paying for it
-# 84 times buys nothing; it is the convention in MAgPIE's own project start
-# scripts (scripts/start/projects/). Run one stage without --dry-run first if
-# the model code itself has changed.
+# codeCheck = FALSE turns off MAgPIE's check that its own GAMS source is
+# internally consistent. That check reads model code, which is identical for
+# every run of a sweep, so running it 84 times finds the same thing 84 times and
+# costs minutes each. It is off because this pipeline changes data, never model
+# code; if the model code itself has been edited, check it once by hand before
+# submitting a sweep.
 run_stage <- function(pcfg, stage, be = NULL, ghg = NULL, dry_run = FALSE, first = TRUE) {
   stage <- .as_stage(stage)
   cfg <- stage_cfg(pcfg, stage, be = be, ghg = ghg)
@@ -104,18 +106,19 @@ run_stage <- function(pcfg, stage, be = NULL, ghg = NULL, dry_run = FALSE, first
       log_step("WRITE", write_stage1_fingerprint(pcfg, folder))
     } else {
       log_warn("start_run() left no ", folder, ", so no ", STAGE1_FINGERPRINT_FILE,
-               " was written; the step-1.5 generator will not be able to check that the tau ",
+               " was written; patch_step2 will not be able to check that the tau trajectory ",
                "it reads was solved under preset '", pcfg$preset, "'")
     }
   }
   invisible(cfg)
 }
 
-# MAgPIE re-extracts inputs only when cfg$input differs from what input/info.txt
-# records, and the comparison is over tarball *names*, never contents. A patch
-# whose name a previous run already used is therefore skipped in silence -- the
-# trap content-hashed names exist to close. This is the assertion that the
-# closure held: after start_run(), the info file must name this run's patch.
+# MAgPIE unpacks input data again only when the list of tarball names it has
+# been asked for differs from the list recorded in input/info.txt. It compares
+# names, never contents, so a patch tarball reusing a name a previous run
+# already saw is skipped without a word -- the trap that content-hashed names
+# exist to close. This check confirms the trap stayed closed: once the first run
+# of a stage has started, the info file must name this stage's patch tarball.
 assert_patch_installed <- function(cfg, info = "input/info.txt") {
   patch <- cfg$input[["patch"]]
   if (is.null(patch) || !nzchar(patch)) return(invisible(TRUE))
@@ -142,22 +145,22 @@ assert_patch_installed <- function(cfg, info = "input/info.txt") {
 
 # ---- patch tarballs ---------------------------------------------------------
 
-# The script that builds the patch tarball a stage consumes. Stage 2 consumes
-# what step 1.5 extracts from the stage-1 run; stage 3 consumes what step 2.5
-# extracts from the stage-2 runs.
+# The script that builds the patch tarball a stage reads. Stage 2 reads what
+# patch_step2 takes out of the stage-1 run; stage 3 reads what patch_step3 takes
+# out of the stage-2 runs.
 patch_generator <- function(stage) {
   paste0("messageix/patches/build_step", .as_stage(stage), "_patch.R")
 }
 
-# Generated patch tarballs for this preset and stage that are on disk.
+# Generated patch tarballs for this narrative and stage that are on disk.
 discover_patch <- function(pcfg, stage) {
   dir <- patch_repo_dir(pcfg)
   if (!dir.exists(dir)) return(character(0))
   sort(list.files(dir, pattern = .patch_pattern(pcfg, stage)))
 }
 
-# The naming contract of patch_tarball_name() as a regular expression: preset,
-# stage token, and an 8-character content hash.
+# The naming contract of patch_tarball_name() as a regular expression: the
+# narrative's name, the stage token, and an 8-character content hash.
 .patch_pattern <- function(pcfg, stage) {
   paste0("^", .regex_literal(pcfg$preset), "_", stage_token(stage), "_[0-9a-f]{8}\\.tgz$")
 }
@@ -171,15 +174,15 @@ discover_patch <- function(pcfg, stage) {
 resolve_patch <- function(pcfg, stage, requested = NULL, must_exist = TRUE) {
   dir <- patch_repo_dir(pcfg)
   if (!is.null(requested)) {
-    # A named tarball is checked against the same pattern discovery uses:
-    # the name carries the preset and the stage, so a stage-2 tarball handed to
-    # stage 3, or another preset's tarball handed to this one, is a name error
+    # A named tarball is checked against the same pattern discovery uses: the
+    # name carries the narrative and the stage, so a stage-2 tarball handed to
+    # stage 3, or another narrative's tarball handed to this one, is a name error
     # before it is a data error.
     if (!grepl(.patch_pattern(pcfg, stage), requested)) {
       log_die("--patch=", requested, " does not match the naming contract for stage ",
-              .as_stage(stage), " of preset '", pcfg$preset, "': <preset>_",
+              .as_stage(stage), " of narrative '", pcfg$preset, "': <narrative>_",
               stage_token(stage), "_<8 hex>.tgz. A tarball from another stage or another ",
-              "preset carries different inputs. Generate this one with: Rscript ",
+              "narrative carries different inputs. Generate this one with: Rscript ",
               patch_generator(stage), " --preset=", pcfg$preset)
     }
     if (must_exist && !file.exists(file.path(dir, requested))) {
@@ -212,48 +215,80 @@ resolve_patch <- function(pcfg, stage, requested = NULL, must_exist = TRUE) {
 
 # ---- command line -----------------------------------------------------------
 
+.DRIVER_SCRIPT <- c("driver_step1_tau.R", "driver_step2_price.R", "driver_step3_demand.R")
+
+# The one-line reminder that follows a command-line mistake. --help prints the
+# full text below instead.
+.synopsis <- function(stage) {
+  stage <- .as_stage(stage)
+  paste0("usage: Rscript messageix/start/", .DRIVER_SCRIPT[stage],
+         " [--preset=NAME] [--csv=PATH] ", if (stage > 1L) "[--patch=NAME] " else "",
+         "[--list] [--validate] [--dry-run] [--help]")
+}
+
+# What --help prints. One text for all three stages, differing only in what the
+# stage produces and in whether it reads a patch tarball.
 .usage <- function(stage) {
-  driver <- c("driver_step1_tau.R", "driver_step2_price.R", "driver_step3_demand.R")[.as_stage(stage)]
-  patch <- if (.as_stage(stage) > 1L) "[--patch=NAME] " else ""
-  paste0("usage: Rscript messageix/start/", driver,
-         " [--preset=NAME] [--csv=PATH] ", patch,
-         "[--list] [--validate] [--dry-run]")
+  stage <- .as_stage(stage)
+  produces <- c(
+    "the reference run whose land-use intensity trajectory the rest of the pipeline rests on",
+    "the bioenergy price sweep: one run per bioenergy price level in the preset",
+    "the emulator training set: one run per bioenergy price and GHG price pair")[stage]
+  c(paste0("Submit ", produces, "."),
+    "",
+    paste0("  Rscript messageix/start/", .DRIVER_SCRIPT[stage],
+           " [flags]   (from the MAgPIE model root)"),
+    "",
+    "Flags:",
+    "  --preset=NAME   narrative column of the narratives file (default: default)",
+    paste0("  --csv=PATH      narratives file (default: ", default_preset_csv(), ")"),
+    if (stage > 1L) c(
+      "  --patch=NAME    the patch tarball this stage reads: the file carrying the inputs",
+      "                  the step before it generated. Needed only when more than one is",
+      "                  on disk; otherwise it is found by its name. The pipeline driver",
+      "                  always passes it, naming the tarball it has just built."),
+    "  --list          print the runs this stage would submit, and whether each run",
+    "                  folder is already there, then stop",
+    "  --validate      print every setting this stage changes against MAgPIE's own",
+    "                  defaults, and what varies across the sweep, then stop",
+    "  --dry-run       assemble and narrate every run's config; submit nothing",
+    "  --help          this text",
+    "",
+    "Every option is accepted as --key=value and as --key value.",
+    if (stage > 1L) c(
+      "The runs come from the preset, not from the command line: which prices are swept,",
+      "and what the runs are called, are settings in the narratives file.",
+      paste0("Build the patch tarball first with: Rscript ", patch_generator(stage),
+             " --preset=NAME")),
+    if (stage == 1L)
+      "This stage is one run, and every setting behind it comes from the narratives file.")
 }
 
 # Parse the driver flags. Every flag is optional and order does not matter;
-# anything else stops the run with the usage line.
+# anything else stops the run with the one-line usage.
 parse_stage_args <- function(argv, stage) {
   stage <- .as_stage(stage)
-  opt <- list(preset = "default", csv = default_preset_csv(), patch = NULL,
-              list = FALSE, validate = FALSE, dry_run = FALSE, help = FALSE)
-  seen <- character(0)
-
-  for (arg in argv) {
-    key <- sub("=.*$", "", arg)
-    if (key %in% seen) log_die("flag ", key, " given twice. ", .usage(stage))
-    seen <- c(seen, key)
-    value <- if (grepl("=", arg, fixed = TRUE)) sub("^[^=]*=", "", arg) else NA_character_
-    valued <- function(name) {
-      if (is.na(value) || !nzchar(value)) log_die(name, " needs a value, as ", name, "=... . ", .usage(stage))
-      value
-    }
-    switch(key,
-      "--preset"   = opt$preset <- valued("--preset"),
-      "--csv"      = opt$csv <- valued("--csv"),
-      "--patch"    = {
-        if (stage == 1L) log_die("--patch is not a stage 1 flag: the reference tau run takes no patch tarball. ", .usage(stage))
-        opt$patch <- valued("--patch")
-      },
-      "--list"     = opt$list <- TRUE,
-      "--validate" = opt$validate <- TRUE,
-      "--dry-run"  = opt$dry_run <- TRUE,
-      "--help"     = opt$help <- TRUE,
-      "-h"         = opt$help <- TRUE,
-      log_die("unknown argument '", arg, "'. ", .usage(stage))
-    )
+  opt <- parse_flags(argv,
+                     known   = c("preset", "csv", "patch"),
+                     flags   = c("list", "validate", "dry-run", "help"),
+                     aliases = c("preset-csv" = "csv"),
+                     usage   = .synopsis(stage))
+  if (stage == 1L && !is.null(opt$patch)) {
+    log_die("--patch is not a stage 1 flag: the reference run reads the base input tarballs ",
+            "and nothing else. ", .synopsis(stage))
   }
-  if (opt$list && opt$validate) log_die("--list and --validate do different things; pick one. ", .usage(stage))
-  opt
+  chosen <- c("--list", "--validate", "--dry-run")[c(isTRUE(opt$list), isTRUE(opt$validate),
+                                                     isTRUE(opt[["dry-run"]]))]
+  if (length(chosen) > 1L) {
+    log_die(paste(chosen, collapse = " and "), " do different things; pick one. ", .synopsis(stage))
+  }
+  list(preset   = if (is.null(opt$preset)) "default" else opt$preset,
+       csv      = if (is.null(opt$csv)) default_preset_csv() else opt$csv,
+       patch    = opt$patch,
+       list     = isTRUE(opt$list),
+       validate = isTRUE(opt$validate),
+       dry_run  = isTRUE(opt[["dry-run"]]),
+       help     = isTRUE(opt$help))
 }
 
 # ---- reporting --------------------------------------------------------------
@@ -313,11 +348,11 @@ print_run_set <- function(pcfg, stage, runs) {
     stringsAsFactors = FALSE
   )
   log_step("CONFIG", nrow(runs), " run(s) in stage ", .as_stage(stage),
-           " of preset '", pcfg$preset, "'")
+           " of narrative '", pcfg$preset, "'")
   .print_table(tab)
 }
 
-# MAgPIE's own starting point, before setScenario, the preset, or stage logic.
+# MAgPIE's own starting point, before setScenario, the narrative, or stage logic.
 .baseline_cfg <- function() {
   cfg <- NULL
   source("config/default.cfg", local = TRUE)
@@ -339,23 +374,23 @@ print_run_set <- function(pcfg, stage, runs) {
 
 # Everything one assembled cfg changes relative to config/default.cfg, with
 # where the change came from:
-#   ssp     the SSP column of MAgPIE's config/scenario_config.csv
-#   preset  a gms$ row of the preset CSV, in scope for this stage
-#   stage   stage logic in utils_config.R; a preset may not touch these
-#   run     run control (names, folders, inputs, execution environment)
-# This is the golden-master audit surface: one line per setting that is not a
+#   ssp      the SSP column of MAgPIE's config/scenario_config.csv
+#   setting  a narrative or infrastructure setting, in scope for this stage
+#   stage    stage logic in utils_config.R; nothing else may touch these
+#   run      run control (names, folders, inputs, execution environment)
+# This is how the golden runs are audited: one line per setting that is not a
 # MAgPIE default. Every stage-controlled switch appears whether or
 # not it moves, because "the stage set it and it happens to equal the MAgPIE
 # default" and "the stage never set it" are different facts.
 cfg_deltas <- function(pcfg, stage, cfg, base = .baseline_cfg()) {
-  preset_keys <- stage_gms_keys(pcfg, stage)
+  setting_keys <- stage_gms_keys(pcfg, stage)
   stage_keys <- stage_controlled_switches()
   rows <- list()
 
   for (key in union(names(base$gms), names(cfg$gms))) {
     old <- .as_text(base$gms[[key]])
     new <- .as_text(cfg$gms[[key]])
-    origin <- if (key %in% stage_keys) "stage" else if (key %in% preset_keys) "preset" else "ssp"
+    origin <- if (key %in% stage_keys) "stage" else if (key %in% setting_keys) "setting" else "ssp"
     if (identical(old, new) && origin != "stage") next
     rows[[length(rows) + 1L]] <- data.frame(field = paste0("gms$", key), source = origin,
                                             magpieDefault = old, assembled = new,
@@ -454,22 +489,20 @@ run_driver_main <- function(stage, headline, notes = NULL,
   stage <- .as_stage(stage)
   opt <- parse_stage_args(argv, stage)
   if (opt$help) {
-    cat(.usage(stage), "\n", sep = "")
+    cat(.usage(stage), sep = "\n")
+    cat("\n")
     return(invisible(TRUE))
   }
 
   pcfg <- resolve_config(preset = opt$preset, csv = opt$csv)
   runs <- expected_run_folders(pcfg, stage)
 
-  # Stage 1 carries no narrative line: the reference tau run is shared by every
-  # narrative, which is why its output folder sits one level above theirs.
-  entries <- list(preset = pcfg$preset, csv = opt$csv, identifier = pcfg$identifier)
-  if (stage > 1L) entries$narrative <- preflag(pcfg)
+  entries <- list(narrative = pcfg$preset, csv = opt$csv, identifier = pcfg$identifier)
   entries$runs <- nrow(runs)
   entries[["output to"]] <- results_folder(pcfg, stage)
   log_banner(headline, c(entries, as.list(notes)))
 
-  # --list needs no patch tarball: run names come from the preset alone.
+  # --list needs no patch tarball: run names come from the narrative alone.
   if (opt$list) {
     print_run_set(pcfg, stage, runs)
     return(invisible(runs))
