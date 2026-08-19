@@ -220,6 +220,52 @@ spec against the repository does not log them as gaps.
   (see "The abandoned preset" above). The overlay's preset does not set the food module at all,
   so MAgPIE's own default resolves.
 
+### The configuration surface — three tiers (2026-08-19)
+
+The single preset CSV was one file holding everything: MAgPIE switches, tarball names, cluster
+queue, polling intervals, output folder names, and a forty-line comment wall explaining them.
+It was honest about what the pipeline does and hostile to a researcher who only wants to change
+a biodiversity target. The surface is now split by who owns each setting. **Narrative** —
+thirteen rows in `presets/narratives.csv`, the settings an experiment varies, in a file Excel
+opens cleanly. **Infrastructure** — everything operational, plus the constants that are
+properties of the linkage rather than of a narrative, as code defaults in
+`R/pipeline_infrastructure.R` with an `MAGPIE_MM_*` environment variable and a `--set
+key=value` on top. **Derived** — the region code, the output folder, the matrix name and the
+input tarballs, worked out from the region set and the column name. The identifier was the
+sharpest case: it used to be a row a new column had to remember to change, enforced by a
+warning that a hurried person would scroll past, and forgetting it meant one narrative silently
+overwriting another's runs. Deriving it as `MESSAGEix_<regionscode>[_<column>]` makes the
+collision impossible by construction, so the warning and the ensemble driver's collision
+machinery both collapse to one assertion. `default` derives to the same names it always had, so
+the pinned runs and `magpie_input_SSP2_ref_woodfuel.csv` are untouched. Every setting is
+documented once, in `docs/parameters.md`, instead of in a comment wall nobody reads inside the
+file they are editing.
+
+---
+
+### Run names are ours (2026-08-19)
+
+Folder and run names were ported from the original scripts and carried their habits: a
+`SSP2_BD00` subfolder level repeating what the identifier already says, a `BD00` token in every
+run name, trailing words (`price`, `demand`) naming the stage the folder is already under, and
+two spellings of the same bioenergy price level — `BE05` in folder names, `_BE5` unpadded in the
+scenario column `c60_2ndgen_biodem` asks for. The two spellings were the sharpest of these: they
+had to be kept in step by hand, and a mismatch fails deep inside GAMS on an unknown set element.
+
+Names are now derived from one scheme: `output/<identifier>/tau`, `output/<identifier>/BE05`,
+`output/<identifier>/BE05_G0400`. **Run labels for the bioenergy demand scenarios are unified to
+the padded form** (`<narrative>_BE05`), a deliberate label-only deviation from the original
+runs — the data behind them is identical, the GAMS solution is label-independent, and the
+emulator matrix is unaffected, because no run or column label reaches any column of it. The GHG
+price columns are untouched (`G0400exp2110`): those trajectories are supplied from outside this
+repository under the names their author gave them, so their spelling is a contract, not a
+choice. Golden-master validation compares matrix content on
+`Region × Variable × scenario tags × year`, never on folder spellings or row order. For checking
+against stage-3 runs made before this pipeline, the two matrix scripts take `--layout=legacy`,
+which reads the older folder names without anything being renamed; it produces nothing.
+
+---
+
 ### Version pin
 
 The repository pins **v4.11.0**. The golden reference matrix is a v4.11.0 artefact, so this is
@@ -270,11 +316,14 @@ piam packages resolve `CXXABI_1.3.15`. The list itself lives in the preset and r
 wrapper through `messageix/R/utils_env.R`, so `run_matrix.sh` states no module, queue or mail
 address of its own.
 
-**A shared step-1 run folder across narratives.** The step-1 title is `<ssp>_tau` and its folder
-sits above the narrative folders, which is right — a reference tau is reusable — but several
-step-1 settings are preset-driven, and `cfg$force_replace` is `TRUE`, so a second narrative's
-step-1 run would silently overwrite the first's and the step-2 patch would be built on the wrong
-tau. **Fix:** step 1 writes `messageix_stage1_fingerprint.txt` into its run folder and
+**A shared step-1 run folder across narratives.** The step-1 folder used to sit above the
+narrative folders, so a second narrative's step-1 run could silently overwrite the first's and
+the step-2 patch would be built on the wrong tau. Deriving the identifier per narrative settled
+the cross-narrative half of this: each narrative now has its own `output/<identifier>/tau`, and
+one reference tau is no longer shared between them. The remaining exposure is a narrative
+against its own past — a folder is addressed by name, `cfg$force_replace` is `TRUE`, and a
+stage-1 setting may have changed since the folder was filled. **Fix:** step 1 writes
+`messageix_stage1_fingerprint.txt` into its run folder and
 `build_step2_patch.R` refuses to extract tau from a run whose fingerprint disagrees with its
 preset. The folder names are unchanged — they are part of the golden-master artefact — so the
 collision becomes an error rather than a rename.
