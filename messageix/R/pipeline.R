@@ -58,7 +58,7 @@
 # |    preflight(steps, plan, pcfg, opt)   -> chr; the problems that stop the run
 # |    run_step_command(args, label, stdout) -> invisible; one phase as its own process
 # |    run_pipeline(steps, plan, pcfg, opt) -> chr; what became of each step
-# |    submit_driver(args, pcfg, name, stages) -> invisible(TRUE); hand a command to SLURM
+# |    submit_driver(args, pcfg, name, stages, wait_hours) -> invisible(TRUE); hand a command to SLURM
 # |    matrix_csv(pcfg, opt) / woodfuel_csv(pcfg, opt) -> chr(1); the matrix files
 # |
 # |  Dependencies: tibble/dplyr and messageix/R/run_phase.R, for the naming
@@ -71,11 +71,29 @@ MATRIX_DIR_DEFAULT <- "output/emulator"
 
 # ---- the phases -------------------------------------------------------------
 
-# The pipeline, in the order it runs. `kind` decides how a step is started and
-# how "already finished" is judged; `stage` is the MAgPIE stage a step runs or
-# packs inputs for; `user` says whether it is a phase a person schedules. The
-# two packing steps are not: they happen between phases, when what they would
-# write is not already there.
+# The pipeline, in the order it runs. `stage` is the MAgPIE stage a step runs or
+# packs inputs for; `user` says whether it is a phase a person schedules. The two
+# packing steps are not: they happen between phases, when what they would write
+# is not already there.
+#
+# `kind` decides how a step is started and how "already finished" is judged.
+# There are three, and this is the whole of what each one means:
+#
+#   stage   a phase of MAgPIE runs. Started by running run_phase.R as its own
+#           process, which submits the runs; finished when every run the
+#           experiment expects has solved.
+#   patch   packing what one phase produced into the inputs the next one reads.
+#           Started by running that stage's packing script; finished when the
+#           tarball it would write, whose name carries a digest of its contents,
+#           is already in the patch directory.
+#   matrix  the reduce phase. Started by running the two reduce scripts in turn;
+#           finished when the woodfuel CSV they end with exists.
+#
+# Five places act on the kind, so a fourth kind is five edits: step_status() and
+# step_commands() below; the lookup in plan_steps() that pairs a packing step
+# with the phase reading what it packs; preflight(), which checks the packed
+# tarballs a phase would face; and run_pipeline(), which narrates rather than
+# runs the steps that write artefacts when the command is a rehearsal.
 pipeline_steps <- function() {
   list(
     list(name = "calibrate", kind = "stage", stage = 1L, user = TRUE,
@@ -376,11 +394,13 @@ input_tarball_problems <- function(pcfg) {
 # command and a library both, and reading it defines validate_f56() without
 # packing anything.
 #
-# What it looks at: the pollutants GAMS taxes, the order of the two
-# sub-dimensions, one column per GHG price level this experiment sweeps, every
-# model year, and no gaps. A missing column is worth catching here: found while
-# packing instead, it costs the two phases of cluster time that come before it,
-# and one file has to satisfy every experiment, not only the first.
+# What it looks at is the structure: the pollutants GAMS taxes, the order of the
+# two sub-dimensions, one column per GHG price level this experiment sweeps,
+# every model year, and no gaps. The prices in the file are not checked and
+# cannot be -- a plausible trajectory under the right column name passes. A
+# missing column is worth catching here: found while packing instead, it costs
+# the two phases of cluster time that come before it, and one file has to satisfy
+# every experiment, not only the first.
 #
 # Returned as text rather than raised, so that one run reports every problem it
 # has at once.
@@ -441,9 +461,10 @@ preflight <- function(steps, plan, pcfg, opt) {
   if (runs("pack_demand")) {
     if (is.null(opt$f56)) {
       problems <- c(problems, paste0(
-        "the demand sweep needs --f56=PATH: the file of GHG price trajectories for this ",
-        "experiment. Nothing in this repository generates it, and without it there are no ",
-        "prices to sweep. Ask Di Sheng for the file; running Rscript ",
+        "the demand sweep needs --f56=PATH: f56_pollutant_prices.cs3, the file of GHG price ",
+        "trajectories for this experiment, one column per GHG price level it sweeps. Nothing ",
+        "in this repository generates it, and without it there are no prices to sweep. Ask ",
+        "Di Sheng for the file; running Rscript ",
         patch_generator_script(3L), " on its own prints the full description of what it has ",
         "to contain."))
     } else if (!file.exists(opt$f56)) {
@@ -629,20 +650,23 @@ SUBMIT_MARGIN_HOURS <- 2L
 # phases of runs, and several experiments do that once each, so the process
 # lives for days -- which is exactly the process a login node kills.
 #
-#   args    the command line to run, as arguments to Rscript, without --submit
-#   pcfg    a resolved experiment, for the queue, the modules and the mail address
-#   name    SLURM job name. Deliberately not the name MAgPIE's own runs carry:
-#           the wait counts queued MAgPIE jobs, and a job answering to the same
-#           name would count itself and never stop waiting.
-#   stages  how many phases of runs this command will wait for, which is what
-#           its time limit is made of
-submit_driver <- function(args, pcfg, name, stages) {
+#   args        the command line to run, as arguments to Rscript, without --submit
+#   pcfg        a resolved experiment, for the queue, the modules and the mail address
+#   name        SLURM job name. Deliberately not the name MAgPIE's own runs carry:
+#               the wait counts queued MAgPIE jobs, and a job answering to the
+#               same name would count itself and never stop waiting.
+#   stages      how many phases of runs this command will wait for, for the log line
+#   wait_hours  the waiting those phases add up to, in hours: each phase counted
+#               at the waiting time its own experiment allows. The caller sums it
+#               per experiment, because two experiments in one command may allow
+#               different waiting times.
+submit_driver <- function(args, pcfg, name, stages, wait_hours) {
   if (!nzchar(Sys.which("sbatch"))) {
     log_die("--submit needs sbatch, and there is none on PATH. On a machine without a queue, ",
             "run it in the background instead: ",
             "nohup Rscript ", paste(args, collapse = " "), " > pipeline.log 2>&1 &")
   }
-  hours <- as.integer(stages * as.numeric(pcfg$timeout_hours)) + SUBMIT_MARGIN_HOURS
+  hours <- as.integer(ceiling(as.numeric(wait_hours))) + SUBMIT_MARGIN_HOURS
   dir.create(JOB_DIR, recursive = TRUE, showWarnings = FALSE)
   script <- file.path(JOB_DIR, paste0(name, ".sh"))
   mail <- mail_user(pcfg)
@@ -670,7 +694,8 @@ submit_driver <- function(args, pcfg, name, stages) {
   ), script)
 
   log_step("SUBMIT", "job script ", script, ", ", hours, " h limit (", stages,
-           " phase(s) of runs at ", pcfg$timeout_hours, " h plus ", SUBMIT_MARGIN_HOURS, " h)")
+           " phase(s) of runs, ", signif(as.numeric(wait_hours), 4), " h of waiting plus ",
+           SUBMIT_MARGIN_HOURS, " h)")
   status <- system2("sbatch", shQuote(script))
   if (!identical(as.integer(status), 0L)) {
     log_die("sbatch refused ", script, " (status ", status, "). The script is left in place; ",

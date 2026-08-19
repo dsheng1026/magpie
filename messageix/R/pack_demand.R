@@ -21,19 +21,16 @@
 # |  cfg$gms$c60_2ndgen_biodem can ask for, with nobody editing a set file. Those
 # |  set files are written by the machine; never edit them by hand.
 # |
-# |  Nothing here builds the f56 file. The G####exp2110 GHG price trajectories
-# |  are not generated anywhere in this repository, and what their labels mean --
-# |  which price level, in which year and currency, and what growth rate the
-# |  "exp2110" extension applies out to 2110 -- cannot be worked out from the
-# |  code around them. This step therefore takes the file from whoever runs it
-# |  (--f56=PATH), checks it against the experiment, and stops with a message
-# |  saying what is missing when it is not there. It will not guess: a wrong
-# |  trajectory would change every demand run while looking entirely plausible.
+# |  Nothing here builds the f56 file. It is taken from whoever runs this step
+# |  (--f56=PATH) and checked against the experiment -- the structure only: the
+# |  columns it has to carry, the pollutants, the model years and that no value is
+# |  missing. The prices in it are taken on trust, because nothing here can tell a
+# |  plausible trajectory from the right one.
 # |
-# |  The non-CO2 price cap is not expected inside f56. Supply uncapped
-# |  trajectories: cfg$gms$s56_limit_ch4_n2o_price applies the cap inside GAMS
-# |  to whichever scenario c56_pollutant_prices selects, so changing
-# |  nonco2_price_cap_usd17_tc needs no file inside any tarball edited.
+# |  Run this script without --f56 and it prints the whole story: what the file
+# |  has to contain, why this repository cannot build it, who to ask for it, and
+# |  the one thing to check when asking (the trajectories must be uncapped). That
+# |  message is where all of it is written down.
 # |
 # |  The pipeline packs this itself, on the way from the price phase to the
 # |  demand phase. Run it by hand to rebuild the packed inputs alone.
@@ -69,11 +66,11 @@
 # |
 # |  Interface
 # |    GAP_FILL_YEARS / GAP_FILL_HOLD_FROM / HIST_YEARS / HIST_VALUES  documented defaults
-# |    gap_fill_years(x, years, hold_from)  -> magpie object with no year gaps
+# |    gap_fill_years(x, years, hold_from, settled) -> magpie object with no year gaps
 # |    sort_years(x, years)                 -> magpie object, years ascending
 # |    zero_history(x, hist_years, hist_values) -> magpie object
 # |    taxable_pollutants(sets_file)        -> chr; GAMS set pollutants(pollutants_all)
-# |    seed_required_columns(input_gms)     -> chr; f60 columns GAMS dereferences unconditionally
+# |    seed_required_columns(input_gms, preloop_gms) -> chr; f60 columns every run looks up
 # |    assert_seed(seed, pcfg)              -> invisible(TRUE)
 # |    assert_stage2_complete(pcfg)         -> invisible(TRUE); every price run present and solved
 # |    extract_bioenergy_column(pcfg, be)   -> magpie object, PJ per yr, one scenario column
@@ -102,6 +99,13 @@ GAP_FILL_YEARS <- seq(1995, 2150, by = 5)
 # Years at or after this one take this year's value instead of being
 # interpolated: past 2100 there is no later reported year to average against, so
 # the level is held flat. That is the documented convention of this pipeline.
+#
+# It makes 2100 the one year that cannot be filled in. Every earlier year on the
+# grid can be averaged from its neighbours, but 2100 is what all the later ones
+# are held at, so a run that does not report it stops the packing rather than
+# being patched around. That is deliberate: 2100 is inside the horizon every run
+# solves for, and a demand-sweep run that has not reported it has not finished
+# reporting.
 GAP_FILL_HOLD_FROM <- 2100
 
 # Second-generation bioenergy is set to zero over the historical period, in
@@ -127,7 +131,15 @@ EJ_TO_PJ <- 1000
 # one has to be there. Two missing years in a row means a broken report rather
 # than something to interpolate through, and stops here instead of spreading
 # empty values onward.
-gap_fill_years <- function(x, years = GAP_FILL_YEARS, hold_from = GAP_FILL_HOLD_FROM) {
+#
+#   settled  years whose value is decided further down whatever the report says
+#            -- the historical period, which zero_history() overwrites. There is
+#            nothing to average for one of these, so it goes straight in at the
+#            value it will end up with. It is still a missing year, and the
+#            neighbours it would have been averaged from are still required: a
+#            report with a hole in it is a broken report wherever the hole falls.
+gap_fill_years <- function(x, years = GAP_FILL_YEARS, hold_from = GAP_FILL_HOLD_FROM,
+                           settled = HIST_YEARS, settled_value = HIST_VALUES) {
   hold_year <- paste0("y", hold_from)
   for (year in years) {
     name <- paste0("y", year)
@@ -139,7 +151,8 @@ gap_fill_years <- function(x, years = GAP_FILL_YEARS, hold_from = GAP_FILL_HOLD_
         log_die("gap_fill_years: ", name, " is missing and so is ", absent,
                 "; adjacent-year averaging needs both neighbours")
       }
-      value <- (x[, neighbours[1L], ] + x[, neighbours[2L], ]) / 2
+      value <- if (name %in% settled) settled_value
+               else (x[, neighbours[1L], ] + x[, neighbours[2L], ]) / 2
     } else {
       if (!hold_year %in% magclass::getYears(x)) {
         log_die("gap_fill_years: ", name, " is missing and ", hold_year,
@@ -173,15 +186,23 @@ zero_history <- function(x, hist_years = HIST_YEARS, hist_values = HIST_VALUES) 
 # Two bioenergy demand columns MAgPIE looks up by name in every run, whichever
 # scenario was selected. A starting file missing either one stops the run on an
 # unknown set element:
-#   c60_2ndgen_biodem_noselect  the demand path applied in regions outside the
-#                               selected policy set; its name is MAgPIE's own
-#                               default, read out of the module settings
-#   R32M46-SSP2EU-NPi           the path every run's early years are harmonised
-#                               against, named directly in the model code
-# This is why the new columns are appended to the base tarball's own file rather
-# than written into a fresh one holding only what this step produced.
+#   the noselect column       the demand path applied in regions outside the
+#                             selected policy set. Its name is MAgPIE's own
+#                             default for c60_2ndgen_biodem_noselect.
+#   the harmonisation column  the path every run's early years are overwritten
+#                             with, so that the near past is the same in all of
+#                             them.
+#
+# Both names are read out of the bioenergy module's own code, not written down
+# here: a MAgPIE version that renames either one then stops this step with a
+# message naming the file that asks for it, instead of failing inside GAMS in
+# every run of the sweep.
+#
+# This is also why the new columns are appended to the base tarball's own file
+# rather than written into a fresh one holding only what this step produced.
 seed_required_columns <- function(
-    input_gms = "modules/60_bioenergy/1st2ndgen_priced_feb24/input.gms") {
+    input_gms   = "modules/60_bioenergy/1st2ndgen_priced_feb24/input.gms",
+    preloop_gms = "modules/60_bioenergy/1st2ndgen_priced_feb24/preloop.gms") {
   if (!file.exists(input_gms)) {
     log_die("seed_required_columns: ", input_gms, " not found; run from the MAgPIE model root")
   }
@@ -193,7 +214,25 @@ seed_required_columns <- function(
   noselect <- lines[hit[1L]] |>
     stringr::str_remove("^\\$setglobal\\s+c60_2ndgen_biodem_noselect\\s+") |>
     stringr::str_trim()
-  unique(c(noselect, "R32M46-SSP2EU-NPi"))
+
+  if (!file.exists(preloop_gms)) {
+    log_die("seed_required_columns: ", preloop_gms, " not found; run from the MAgPIE model root")
+  }
+  # The harmonisation column is the one the module reads by a name written out in
+  # full, rather than through a switch. Anything in %...% is a switch and is a
+  # scenario the run selects, not a column every run needs.
+  found <- stringr::str_match_all(
+    readr::read_lines(preloop_gms, progress = FALSE),
+    "f60_bioenergy_dem\\(\\s*t\\s*,\\s*i\\s*,\\s*\"([^\"%]+)\"\\s*\\)")
+  harmonised <- unique(unlist(lapply(found, function(hit) hit[, 2L]), use.names = FALSE))
+  harmonised <- harmonised[!is.na(harmonised) & nzchar(harmonised)]
+  if (!length(harmonised)) {
+    log_die("seed_required_columns: ", preloop_gms, " names no bioenergy demand column in full, ",
+            "so the column every run's early years are harmonised against cannot be read out of ",
+            "it. This version of the bioenergy module has moved or renamed it, and this check ",
+            "has to move with it")
+  }
+  unique(c(noselect, harmonised))
 }
 
 # The starting file must be f60_bioenergy_dem.cs3 as it comes in the base input
@@ -212,7 +251,8 @@ assert_seed <- function(seed, pcfg) {
   absent <- setdiff(required, columns)
   if (length(absent)) {
     log_die("the bioenergy demand file ", seed, " is missing the scenario column(s) ", absent,
-            ", which MAgPIE looks up in every run. This is not the base tarball's own file")
+            ", which MAgPIE looks up in every run -- their names come out of the bioenergy ",
+            "module's own input.gms and preloop.gms. This is not the base tarball's own file")
   }
   new_columns <- purrr::map_chr(pcfg$prices_bioenergy, function(be) scen_column(pcfg, be))
   clash <- intersect(new_columns, columns)
@@ -324,6 +364,13 @@ f56_missing_message <- function(pcfg) {
 # Check the supplied GHG price file against the experiment before it is packed.
 # A column the demand sweep asks for but the file does not carry fails inside
 # GAMS once per run, hours after the runs were submitted.
+#
+# This is a check on the structure and on nothing else: the two sub-dimensions
+# and their order, one column per GHG price level the experiment sweeps, every
+# model year, and no missing value. The prices themselves are trusted. A file
+# carrying the wrong trajectory under the right column name passes here and
+# changes every demand run, which is why the file comes from the person who knows
+# what is in it.
 #
 # The order of the two sub-dimensions is fixed, not a matter of taste. MAgPIE
 # declares the table as f56_pollutant_prices(t_all, i, pollutants, ghgscen56) --
@@ -461,7 +508,9 @@ pack_demand <- function(pcfg, f56 = NULL, seed = NULL) {
   staged_f56 <- file.path(stage_dir, "f56_pollutant_prices.cs3")
   if (!file.copy(f56, staged_f56)) log_die("cannot stage the f56 file from ", f56)
   log_step("CHECK", "f56 from ", f56, " carries the ", length(pcfg$prices_ghg),
-           " GHG price column(s) of experiment '", pcfg$experiment, "', uncapped")
+           " GHG price column(s) of experiment '", pcfg$experiment,
+           "' over every model year. What the trajectories in them say is taken as given, ",
+           "including that they are uncapped")
 
   # A lever of the world may change the files the runs read rather than a value
   # in the config. Every such lever registered for this phase is asked what it
@@ -493,10 +542,10 @@ pack_demand <- function(pcfg, f56 = NULL, seed = NULL) {
   "",
   "Flags:",
   "  --f56=PATH          the GHG price trajectories for this experiment, as a cs3 file with",
-  "                      one column per GHG price level. Required, and checked against the",
-  "                      experiment before anything is packed: nothing in this repository",
-  "                      builds these trajectories. Run this script without --f56 and it",
-  "                      prints what the file has to contain and who to ask for it.",
+  "                      one column per GHG price level. Required. Its structure is checked",
+  "                      against the experiment before anything is packed; the prices in it",
+  "                      are not. Run this script without --f56 and it prints in full what",
+  "                      the file has to contain and who to ask for it.",
   "  --experiment=NAME   an experiment of messageix/experiments.R (default: default)",
   "  --set=key=value     override one setting for this build; repeatable. Any lever of the",
   "                      world (bii_target, messageix/R/world_levers.R), the sampling plan,",

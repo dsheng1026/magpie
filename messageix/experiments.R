@@ -8,7 +8,9 @@
 # |    design()     the sampling plan -- which bioenergy price levels the price
 # |                 sweep visits, and which GHG price levels the demand sweep
 # |                 visits. Leaving it out uses the grid the pipeline was tested
-# |                 on: seven bioenergy prices and twelve GHG prices, 84 runs.
+# |                 on: seven bioenergy prices and twelve GHG prices, which is 84
+# |                 demand runs. One experiment is 92 MAgPIE runs in all -- one
+# |                 calibration run, seven price runs, 84 demand runs.
 # |
 # |  Write only what differs from the defaults. Every lever of the world, what it
 # |  means and what it may be, is registered in messageix/R/world_levers.R; the
@@ -32,13 +34,29 @@ if (!exists("narrative", mode = "function")) source("messageix/R/utils_config.R"
 EXPERIMENTS <- list(
 
   # The reference experiment: MAgPIE's SSP2 world at R12, no biodiversity
-  # target, yields without climate impacts. It reproduces the golden runs.
+  # target, yields without climate impacts. It reproduces the golden runs -- the
+  # validated reference runs behind magpie_input_SSP2_ref_woodfuel.csv, which is
+  # the matrix this pipeline has to be able to rebuild before it is trusted with
+  # anything new (messageix/docs/pipeline.md, section 10).
   default = experiment(narrative(), design()),
 
   # High biodiversity protection under climate-impacted yields: 78 percent of
   # the biodiversity intactness index maintained, and crop yields that carry
   # climate change impacts.
   biodiversity = experiment(narrative(bii_target = 0.78, yields_scenario = "cc"))
+
+  # The shared socioeconomic pathway and the set of world regions are levers of
+  # the same kind, left at SSP2 and R12 by the two entries above. Written out
+  # they look like this:
+  #
+  #   ssp5 = experiment(narrative(ssp = "SSP5")),
+  #   r10  = experiment(narrative(region_set = "R10"))
+  #
+  # Both need more than the line, because both change which input data the runs
+  # read. The cellular input tarball carries the climate forcing of one pathway,
+  # so another SSP needs its own tarballs; and a region set is one entry in
+  # messageix/R/pipeline_infrastructure.R pairing its tarballs with a
+  # region-name table. R12 is the only region set the pipeline knows so far.
 
 )
 

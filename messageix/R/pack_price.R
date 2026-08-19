@@ -11,8 +11,8 @@
 # |  MAgPIE's exogenous technological-change realization expects
 # |  f13_tau_scenario.csv to be region- and time-specific and to replace the
 # |  placeholder file shipped in the base input tarballs. Exporting ov_tau at its
-# |  "level" slice produces exactly that shape, and extract_tau() below does
-# |  nothing more than write it out -- into a staging directory rather than
+# |  "level" slice produces exactly that shape, so the trajectory is read,
+# |  checked, and written out unchanged -- into a staging directory rather than
 # |  straight into modules/13_tc/input/, because the file has to travel in a
 # |  tarball.
 # |
@@ -72,10 +72,11 @@
 # |    timestep_years(timesteps)            -> chr; model years of a c_timesteps token
 # |    configured_timesteps(pcfg)           -> chr(1); the experiment's c_timesteps token
 # |    pack_patch(files, pcfg, stage)       -> chr(1); tarball name, written to patch_repo
-# |    extract_tau(gdx, out_csv)            -> magpie object; writes the csv
+# |    read_tau(gdx)                        -> magpie object; the calibrated trajectory
 # |    validate_tau(tau, years)             -> invisible(TRUE)
+# |    write_tau(tau, out_csv)              -> invisible(chr(1)); writes the csv
 # |    stage_extra_files(dir, stage_dir)    -> chr; staged copies of the extra files
-# |    pack_price(pcfg, ...)         -> chr(1); tarball name
+# |    pack_price(pcfg, extra_dir, gdx)     -> chr(1); tarball name
 # |
 # |  Dependencies: gdx2, magclass, magpie4, readr/stringr, and the
 # |  messageix/R/ layer (loaded
@@ -126,18 +127,15 @@ configured_timesteps <- function(pcfg) as.character(pcfg$gms[["c_timesteps"]])
 # ---- packing ----------------------------------------------------------------
 
 # Pack the staged files into patch_repo_dir() under a name that carries a digest
-# of their contents, and return that name.
+# of their contents, and return that name. What the tarball is for, and why its
+# name works this way, is the header of this file.
 #
-# The files go in under bare names, with no directory above them, because MAgPIE
-# unpacks a patch tarball flat and then sends each file to the module folder
-# whose own file manifest claims it. A directory prefix hides the file from every
-# manifest. That is why everything is staged into one directory first and tar is
-# pointed at it with -C.
-#
-# The bytes of the archive are not reproducible -- gzip records the time of
-# writing -- but the name is, because the digest is taken over the staged file
-# contents rather than the archive. Rebuilding from identical inputs therefore
-# yields an identical name, and MAgPIE rightly skips unpacking it again.
+# Two things this function has to get right. The files go in under bare names,
+# with no directory above them, which is why they are staged into one directory
+# first and tar is pointed at it with -C. And the digest is taken over the staged
+# file contents, not over the archive: gzip records the time of writing, so the
+# archive's bytes differ on every build while its name has to stay the same for
+# the same inputs.
 pack_patch <- function(files, pcfg, stage) {
   if (!length(files)) log_die("pack_patch: nothing to pack")
   absent <- files[!file.exists(files)]
@@ -168,17 +166,24 @@ pack_patch <- function(files, pcfg, stage) {
 
 # ---- tau --------------------------------------------------------------------
 
-# Write the calibrated tau trajectory out as a csv. ov_tau(t, h, tautype, type)
-# taken at type = "level" has exactly the shape MAgPIE declares for
-# f13_tau_scenario(t_all, h, tautype), so no reshaping is needed. No file_type is
-# given: write.magpie picks the layout from the .csv extension, and that layout
-# is the one GAMS reads back in.
-extract_tau <- function(gdx, out_csv) {
+# The calibrated tau trajectory, read out of the calibration run's solver output.
+# ov_tau(t, h, tautype, type) taken at type = "level" has exactly the shape
+# MAgPIE declares for f13_tau_scenario(t_all, h, tautype), so no reshaping is
+# needed anywhere in this file.
+read_tau <- function(gdx) {
   tau <- gdx2::readGDX(gdx, "ov_tau", select = list(type = "level"))
-  if (is.null(tau)) log_die("extract_tau: no ov_tau in ", gdx)
-  magclass::write.magpie(tau, out_csv)
-  if (!file.exists(out_csv)) log_die("extract_tau: write.magpie produced no ", out_csv)
+  if (is.null(tau)) log_die("read_tau: no ov_tau in ", gdx)
   tau
+}
+
+# Write the trajectory out as the csv the price sweep reads. No file_type is
+# given: write.magpie picks the layout from the .csv extension, and that layout
+# is the one GAMS reads back in. It is written only after validate_tau() has
+# passed, so nothing that failed a check is ever staged for packing.
+write_tau <- function(tau, out_csv) {
+  magclass::write.magpie(tau, out_csv)
+  if (!file.exists(out_csv)) log_die("write_tau: write.magpie produced no ", out_csv)
+  invisible(out_csv)
 }
 
 # Two ways this file can be wrong that GAMS only reports much later, and far
@@ -266,9 +271,10 @@ pack_price <- function(pcfg, extra_dir = NULL, gdx = NULL) {
   on.exit(unlink(stage_dir, recursive = TRUE), add = TRUE)
 
   tau_csv <- file.path(stage_dir, "f13_tau_scenario.csv")
-  tau <- extract_tau(gdx, tau_csv)
+  tau <- read_tau(gdx)
   years <- timestep_years(configured_timesteps(pcfg))
   validate_tau(tau, years)
+  write_tau(tau, tau_csv)
   log_step("CHECK", "tau covers ", length(years), " model years x ",
            length(magclass::getItems(tau, dim = 1)), " regions, minimum ",
            signif(min(as.vector(tau)), 4))
@@ -326,8 +332,8 @@ pack_price <- function(pcfg, extra_dir = NULL, gdx = NULL) {
   "",
   "Every option is accepted as --key=value and as --key value.",
   "The tarball name is written as the last line of output, so a script can read it",
-  "with `tail -n 1`. The name carries a digest of the contents: rebuilding the same",
-  "inputs gives the same name, and changed inputs give a new one.")
+  "with `tail -n 1`. It carries a digest of the contents, so the same inputs give the",
+  "same name and changed inputs give a new one.")
 
 if (invoked_directly("pack_price.R")) {
   .opt <- parse_flags(commandArgs(trailingOnly = TRUE),

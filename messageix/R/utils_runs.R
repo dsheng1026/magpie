@@ -41,6 +41,7 @@
 # |    MIF_NAME                                chr(1); the results file the reporting writes
 # |    run_solved(folder, extra)               -> lgl(1); one finished, solved, reported run
 # |    stage_progress(pcfg, stage, extra)      -> data.frame; expected runs plus a solved column
+# |    reduce_run_grid(pcfg, run_dir, layout)  -> data.frame; the runs both reduce steps read
 # |    assert_runs_solved(runs, where, ...)    -> invisible(TRUE); a whole run set, reported at once
 # |    queued_magpie_jobs()                    -> int(1) or NA; MAgPIE jobs in the SLURM queue
 # |    wait_for_stage(pcfg, stage, poll_seconds, timeout_hours, extra) -> invisible(TRUE)
@@ -142,9 +143,16 @@ write_stage1_fingerprint <- function(pcfg, folder) {
 #   differs     a run solved under other settings; this experiment cannot use it
 #               and has to calibrate again
 #
-# The plan asks this before calling the calibrate phase finished, and packing
-# asks it before reading the run. Both have to reach the same verdict, so both
-# ask here.
+# This is the reporting side of the check: the plan asks it before calling the
+# calibrate phase finished, and the pre-flight asks it before a command starts,
+# so both can say what the folder holds without stopping anything.
+#
+# Packing asks the same question of the folder it is about to read, through
+# assert_stage1_fingerprint() below, and acts on the answer instead of returning
+# it. The two agree by construction -- same record, same fingerprint -- and
+# differ only in what a missing record means: nothing to report here, a warning
+# there. Packing takes a folder as an argument because it may have been given one
+# directly, and the run it reads is the one that has to be checked.
 stage1_state <- function(pcfg) {
   folder <- run_folder(pcfg, 1L)
   if (!dir.exists(folder)) return("absent")
@@ -162,10 +170,12 @@ stage1_state <- function(pcfg) {
   if (!length(hit)) "<absent>" else sub("^[^=]*=", "", hit[1L])
 }
 
-# Refuse to pack a trajectory solved under other settings. A missing record is a
-# warning, not a failure: a run made before the record
-# existed, or one copied in from elsewhere, may well be the right one -- but
-# nobody can check it here, so the person running the pipeline has to.
+# Refuse to pack a trajectory solved under other settings, and say which settings
+# differ. This is the acting side of the check stage1_state() reports on.
+#
+# A missing record is a warning rather than a failure: a run made before the
+# record existed, or one copied in from elsewhere, may well be the right one --
+# but nobody can check it here, so the person running the pipeline has to.
 assert_stage1_fingerprint <- function(pcfg, folder) {
   path <- file.path(folder, STAGE1_FINGERPRINT_FILE)
   if (!file.exists(path)) {
@@ -245,6 +255,33 @@ run_solved <- function(folder, extra = character(0)) {
 stage_progress <- function(pcfg, stage, extra = character(0)) {
   expected_run_folders(pcfg, stage) |>
     dplyr::mutate(solved = purrr::map_lgl(folder, run_solved, extra = extra))
+}
+
+# The demand-sweep runs a reduce step reads out of one directory, in the order
+# the matrix wants them.
+#
+# Both halves of the reduce phase -- the matrix build and the woodfuel step after
+# it -- ask for the grid here, so the two cannot disagree about which runs the
+# matrix is made of. Whether every run in it is usable is the next question, and
+# each half asks that for itself, because they need different things out of a
+# run: the matrix is built from each run's results file, the woodfuel from its
+# solver output.
+#
+#   run_dir  the directory holding the run folders
+#   layout   "current" for runs this pipeline made, "legacy" for a set made
+#            before it
+reduce_run_grid <- function(pcfg, run_dir, layout = "current") {
+  # One experiment writes its runs into one folder, named after it. A directory
+  # named something else is usually the wrong experiment, and the run-by-run
+  # check each half makes next then stops with the full list of folders it looked
+  # for. A warning rather than a stop, because a copied or relocated set of runs
+  # is legitimate -- and the legacy layout has folder names of its own, so the
+  # check does not apply to it.
+  if (identical(layout, "current") && basename(run_dir) != pcfg$identifier) {
+    log_warn("--run-dir is named '", basename(run_dir), "' but experiment '",
+             pcfg$experiment, "' writes its runs to '", pcfg$identifier, "'")
+  }
+  matrix_grid(pcfg, run_dir, layout = layout)
 }
 
 # Check a whole set of runs before any of them is read, and stop with one report

@@ -11,6 +11,14 @@
 # |  Everything happens in one pass in memory -- map, read, tag, combine, write --
 # |  and no half-finished file is left on disk.
 # |
+# |  Run it through the pipeline -- Rscript messageix/run.R matrix NAME -- unless
+# |  one step is being debugged on its own. That command runs both halves of the
+# |  reduce phase in order and hands them the same experiment, the same run
+# |  directory and the same layout. Nothing here can check that: the woodfuel step
+# |  matches its rows against this matrix by scenario tag and region, so two
+# |  invocations made for different experiments would produce a matrix and a
+# |  woodfuel table that do not belong together.
+# |
 # |  Usage, from the MAgPIE model root:
 # |    Rscript messageix/R/createMatrix_MM.R \
 # |      --run-dir output/MESSAGEix_5ff27be8 \
@@ -159,16 +167,6 @@ assert_price_factor <- function(mapping_path, pcfg, tolerance = 1e-6) {
 
 assert_price_factor(MAP_FILE, pcfg)
 
-# One experiment writes its runs into one folder, named after it. A --run-dir
-# named something else is usually the wrong experiment, and the run-by-run check
-# below then stops with the full list of folders it looked for. A warning rather
-# than a stop, because a copied or relocated set of runs is legitimate -- and
-# the legacy layout has its own folder names, so the check does not apply.
-if (identical(layout, "current") && basename(base_output_dir) != pcfg$identifier) {
-  log_warn("--run-dir is named '", basename(base_output_dir), "' but experiment '",
-           pcfg$experiment, "' writes its runs to '", pcfg$identifier, "'")
-}
-
 # ---- mapping ----------------------------------------------------------------
 
 # The only place the iamc package is used: read one run's report.mif, apply the
@@ -194,9 +192,11 @@ unmapped_variables <- function(log_path) {
 
 # ---- build ------------------------------------------------------------------
 
-# Bioenergy price varies fastest, GHG price slowest. This is the row order of
-# the matrix CSV, and it is the order the golden reference matrix uses.
-grid <- matrix_grid(pcfg, base_output_dir, layout = layout)
+# The runs to read, in the order their rows go into the matrix. Both halves of
+# the reduce phase take the grid from the same place; reduce_run_grid() in
+# messageix/R/utils_runs.R is where the order is decided and where a --run-dir
+# that is not this experiment's is caught.
+grid <- reduce_run_grid(pcfg, base_output_dir, layout)
 
 log_banner("REDUCE - the emulator matrix", list(
   experiment = pcfg$experiment,

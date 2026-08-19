@@ -14,6 +14,14 @@
 # |
 # |  Based on woodfuel extraction code from Kristine Karstens.
 # |
+# |  Run it through the pipeline -- Rscript messageix/run.R matrix NAME -- unless
+# |  one step is being debugged on its own. That command runs both halves of the
+# |  reduce phase in order and hands them the same experiment, the same run
+# |  directory and the same layout. Nothing here can check that: this step matches
+# |  its rows against the matrix by scenario tag and region, so a matrix built for
+# |  one experiment and woodfuel extracted for another would join on whatever the
+# |  two happen to have in common.
+# |
 # |  Usage, from the MAgPIE model root:
 # |    Rscript messageix/R/add_woodfuel_to_matrix.R \
 # |      --run-dir output/MESSAGEix_5ff27be8 \
@@ -143,11 +151,6 @@ if (identical(normalizePath(matrix_out, mustWork = FALSE),
   log_die("--out would overwrite --matrix; the unaugmented matrix is the input to this step")
 }
 
-if (identical(layout, "current") && basename(base_output_dir) != pcfg$identifier) {
-  log_warn("--run-dir is named '", basename(base_output_dir), "' but experiment '",
-           pcfg$experiment, "' writes its runs to '", pcfg$identifier, "'")
-}
-
 # ---- extraction -------------------------------------------------------------
 
 # Woodfuel from one run's solver output as a table of Region, year and
@@ -201,9 +204,11 @@ add_woodfuel <- function(mat, wf, year_cols) {
 
 # ---- run pre-flight ---------------------------------------------------------
 
-# Bioenergy price varies fastest, GHG price slowest -- the same order
-# createMatrix_MM.R builds the matrix in.
-grid <- matrix_grid(pcfg, base_output_dir, layout = layout)
+# The runs to read, in the same order the matrix was built in: both halves of the
+# reduce phase take the grid from reduce_run_grid() in
+# messageix/R/utils_runs.R, which is also where a --run-dir that is not this
+# experiment's is caught.
+grid <- reduce_run_grid(pcfg, base_output_dir, layout)
 
 # The region names, read from the same table the matrix was renamed with. Two
 # different tables would produce two files with no region name in common, and a

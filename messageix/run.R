@@ -138,9 +138,14 @@ experiment_collisions <- function(configs, opt) {
   "  --phase=PHASE[,...] run only these phases",
   "  --force[=PHASE,...] run these phases even though they are already finished; bare",
   "                      --force means every phase this command covers",
-  "  --f56=PATH          the GHG price trajectories. Required whenever an experiment has",
-  "                      to build the demand sweep's inputs, and checked for every",
-  "                      experiment before the first one starts.",
+  "  --f56=PATH          f56_pollutant_prices.cs3, the file of GHG price trajectories: one",
+  "                      column per GHG price level an experiment sweeps. Required whenever",
+  "                      an experiment has to build the demand sweep's inputs, and checked",
+  "                      for every experiment before the first one starts. The check is on",
+  "                      the structure only -- the columns, the pollutants, the model years",
+  "                      and that no value is missing. The prices themselves are taken on",
+  "                      trust: nothing here can tell a plausible trajectory from the right",
+  "                      one.",
   paste0("  --matrix-dir=DIR    where the matrix CSVs are written (default: ", MATRIX_DIR_DEFAULT, ")"),
   "  --set=key=value     override one setting for this command; repeatable. Any lever of",
   "                      the world (messageix/R/world_levers.R), the sampling plan, or an",
@@ -154,11 +159,13 @@ experiment_collisions <- function(configs, opt) {
   "                      waiting survives a closed laptop. The job script and its log are",
   paste0("                      written to ", JOB_DIR, "."),
   "  --validate          check everything and print each phase's assembled configs, then",
-  "                      stop. This is the rehearsal for a tree where nothing has been",
-  "                      built yet.",
+  "                      stop. It needs nothing on disk: this is the rehearsal for a tree",
+  "                      where no phase has been run and nothing has been packed yet.",
   "  --dry-run           narrate every command and assemble the run configs; submit",
-  "                      nothing. It needs each phase's packed inputs to be on disk",
-  "                      already, because it assembles a real run config.",
+  "                      nothing. Unlike --validate it needs each phase's packed inputs to",
+  "                      be there already, because an assembled config names them -- so it",
+  "                      rehearses a run that is part of the way through, not one that has",
+  "                      yet to start.",
   "  --help              this text",
   "",
   "Every option is accepted as --key=value and as --key value.",
@@ -234,13 +241,16 @@ run_flags_through <- function(opt, verb, experiments) {
   args
 }
 
-# How many MAgPIE runs the two sweeps of these experiments come to, for the
-# banner. The calibration run is left out: it is one run per experiment and the
-# sweeps are what the number is about.
-sweep_runs <- function(configs) {
+# How many MAgPIE runs these experiments come to, for the banner: every run of
+# every phase, which is the same set of runs the plan table below counts phase by
+# phase. With the tested grid one experiment is 1 calibration run + 7 price runs
+# + 84 demand runs = 92.
+planned_runs <- function(configs) {
   total <- 0
   for (pcfg in configs) {
-    total <- total + nrow(expected_run_folders(pcfg, 2L)) + nrow(expected_run_folders(pcfg, 3L))
+    for (stage in 1:3) {
+      total <- total + nrow(expected_run_folders(pcfg, stage))
+    }
   }
   total
 }
@@ -318,7 +328,7 @@ run_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
   log_banner("magpie -> messageix", list(
     experiments = paste0(length(experiments), ": ", paste(experiments, collapse = ", ")),
     phases      = paste(selected_phases(opt$phase), collapse = ", "),
-    runs        = paste0(sweep_runs(configs), " across the experiments"),
+    runs        = paste0(planned_runs(configs), " across the experiments"),
     "matrix to" = opt[["matrix-dir"]],
     order       = "one experiment at a time, in the order listed"))
 
@@ -351,18 +361,25 @@ run_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
   if (identical(opt$verb, "status")) return(invisible(plans))
 
   if (isTRUE(opt$submit)) {
-    # The time limit is the whole command's: every phase of runs every experiment
-    # will wait for, since they run one after another in this one job.
+    # The time limit is the whole command's, because the experiments run one
+    # after another in this one job: every phase of runs it will wait for, each
+    # counted at the waiting time its own experiment allows. Experiments may set
+    # different waiting times, so the hours are summed per experiment rather than
+    # taken from whichever one is named first.
     is_stage <- rep(FALSE, length(steps))
     for (i in seq_along(steps)) is_stage[i] <- identical(steps[[i]]$kind, "stage")
     waited <- 0
+    wait_hours <- 0
     for (name in experiments) {
       plan <- plans[[name]]
-      waited <- waited + sum(plan$action == "run" & is_stage)
+      phases <- sum(plan$action == "run" & is_stage)
+      waited <- waited + phases
+      wait_hours <- wait_hours + phases * as.numeric(configs[[name]]$timeout_hours)
     }
     return(invisible(submit_driver(run_flags_through(opt, opt$verb, experiments),
                                    pcfg = configs[[experiments[1L]]],
-                                   name = "mm_pipeline", stages = waited)))
+                                   name = "mm_pipeline", stages = waited,
+                                   wait_hours = wait_hours)))
   }
 
   outcomes <- rep("not reached", length(experiments))

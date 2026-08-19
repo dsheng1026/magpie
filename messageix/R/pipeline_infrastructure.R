@@ -1,6 +1,8 @@
-# |  Everything the pipeline needs that an experiment does not say.
+# |  Everything the pipeline needs that an experiment does not say. Who owns
+# |  which setting is stated once, in the header of messageix/R/world_levers.R;
+# |  this is the file two of those owners live in.
 # |
-# |  Three kinds of value live here, and none of them belongs in an experiment:
+# |  Three kinds of value:
 # |
 # |    region set     which input tarballs and which region-name table a region
 # |                   set is made of. One entry per region set.
@@ -14,6 +16,10 @@
 # |                   and its matrix carry. Derived values are read-only: setting
 # |                   one is an error, because two experiments could then land on
 # |                   the same folder.
+# |
+# |  Values only. Which of these settings becomes a MAgPIE switch, and at which
+# |  stages, is part of assembling a run configuration and sits with the rest of
+# |  it in messageix/R/utils_config.R.
 # |
 # |  Interface
 # |    region_sets()                        -> named list; every region set known

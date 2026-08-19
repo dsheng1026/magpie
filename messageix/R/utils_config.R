@@ -16,14 +16,9 @@
 # |  overrides only: whatever is not named keeps the default declared here, so an
 # |  experiment reads as the short list of what makes it different.
 # |
-# |  Three kinds of setting, split by who owns them:
-# |
-# |    narrative + design  messageix/experiments.R, through the constructors here
-# |    infrastructure      messageix/R/pipeline_infrastructure.R. Operational
-# |                        settings and constants of the linkage, each with an
-# |                        environment variable and a "--set key=value" override.
-# |    derived             worked out here, never set: the region code, the output
-# |                        folder name, the matrix name, the input tarballs.
+# |  Which of the three owners a setting belongs to -- the experiment,
+# |  infrastructure, or derived and settable by nobody -- is stated once, in the
+# |  header of messageix/R/world_levers.R. The derived ones are worked out here.
 # |
 # |  Settings flow one way: experiments.R -> resolve_config() -> pcfg ->
 # |  stage_cfg(). pcfg is validated once and then read-only; the single legal
@@ -367,14 +362,27 @@ experiment <- function(narrative = NULL, design = NULL) {
 
 # ---- gms switches this pipeline owns ----------------------------------------
 
-# Infrastructure settings that become a MAgPIE switch directly. The world's own
-# switches are not here: they are declared with their levers in
-# messageix/R/world_levers.R, and .gms_from_key() puts the two lists together.
-.GMS_FROM_INFRASTRUCTURE <- c(
-  timesteps             = "c_timesteps",
-  bioenergy_dem_min     = "s60_2ndgen_bioenergy_dem_min",
-  bioenergy_1st_subsidy = "s60_bioenergy_1st_subsidy"
+# Infrastructure settings that become a MAgPIE switch directly: the switch each
+# one becomes, and the stages it applies at, in one entry each -- the same shape
+# a lever's block gives the world's own switches. The world's switches are not
+# here: they are declared with their levers in messageix/R/world_levers.R, and
+# the two lists are put together by .gms_from_key() and .gms_stage_scope().
+#
+# `stages` is the stage numbers the switch is set at, written as digits. The two
+# bioenergy ones are absent from the calibration run, which leaves them at
+# MAgPIE's own defaults; a switch that applies everywhere carries "123".
+.INFRASTRUCTURE_SWITCHES <- list(
+  timesteps             = list(switch = "c_timesteps",                  stages = "123"),
+  bioenergy_dem_min     = list(switch = "s60_2ndgen_bioenergy_dem_min", stages = "23"),
+  bioenergy_1st_subsidy = list(switch = "s60_bioenergy_1st_subsidy",    stages = "23")
 )
+
+# Setting -> switch, and switch -> the stages it applies at, both read out of the
+# one table above.
+.GMS_FROM_INFRASTRUCTURE <- vapply(.INFRASTRUCTURE_SWITCHES, `[[`, character(1), "switch")
+.GMS_SCOPE_INFRASTRUCTURE <- stats::setNames(
+  vapply(.INFRASTRUCTURE_SWITCHES, `[[`, character(1), "stages"),
+  unname(.GMS_FROM_INFRASTRUCTURE))
 
 # Every setting the researcher names in this pipeline's own terms, and the
 # MAgPIE switch it becomes. Both spellings would otherwise be settable, and an
@@ -402,11 +410,13 @@ pipeline_owned_switches <- function() {
   c(stage_controlled_switches(), unname(.gms_from_key()))
 }
 
-# The setting that owns a gms switch, for the message that refuses it. A lever
-# knows its own switch, including the ones the phase logic sets for it.
+# The settings that own a gms switch, for the message that refuses it. A lever
+# knows its own switch, including the ones the phase logic sets for it. Two
+# settings can own one switch, each at a different phase, and both are returned:
+# a reader sent to one of the two would change the wrong phase.
 .key_owning_switch <- function(switch) {
   hit <- names(.GMS_FROM_INFRASTRUCTURE)[.GMS_FROM_INFRASTRUCTURE == switch]
-  if (length(hit)) return(hit[1L])
+  if (length(hit)) return(hit)
   lever_owning_switch(switch)
 }
 
@@ -415,23 +425,17 @@ pipeline_owned_switches <- function() {
   clash <- intersect(switches, pipeline_owned_switches())
   if (!length(clash)) return(invisible(TRUE))
   instead <- vapply(clash, function(switch) {
-    key <- .key_owning_switch(switch)
-    if (is.na(key)) paste0(switch, " (the stage decides it)") else paste0(switch, " -> set ", key)
+    keys <- .key_owning_switch(switch)
+    if (!length(keys)) paste0(switch, " (the stage decides it)")
+    else paste0(switch, " -> set ", paste(keys, collapse = " or "))
   }, character(1))
   log_die(where, " sets gms switches this pipeline decides: ",
           paste(instead, collapse = "; "), ".")
 }
 
-# Which phases a settled switch applies at, for the switches that do not apply
-# at all three. A switch absent from this table applies at every phase. The two
-# infrastructure ones apply in the price and demand sweeps only, because the
-# calibration run leaves them at MAgPIE's defaults; the world's own scopes come
-# from the levers that declare them.
-.GMS_SCOPE_INFRASTRUCTURE <- c(
-  s60_2ndgen_bioenergy_dem_min = "23",
-  s60_bioenergy_1st_subsidy    = "23"
-)
-
+# Which stages each settled switch applies at: the world's own switches as their
+# levers declare them, the infrastructure ones as the table above declares them.
+# A switch in neither list applies at every stage.
 .gms_stage_scope <- function() c(lever_switch_scope(), .GMS_SCOPE_INFRASTRUCTURE)
 
 # ---- type coercion and value checks -----------------------------------------
@@ -695,13 +699,19 @@ with_patch <- function(pcfg, stage, tarball) {
   pcfg
 }
 
-# An experiment's gms switches that apply at this stage.
+# An experiment's gms switches that apply at this stage. A switch's stages are
+# written as digits ("123", "23"), so the digits are read apart and this stage
+# looked for among them -- a switch applies at a stage or it does not, and asking
+# whether the text contains the digit would be a different question.
 stage_gms_keys <- function(pcfg, stage) {
   stage <- .as_stage(stage)
   scopes <- .gms_stage_scope()
   keys <- names(pcfg$gms)
   scope <- ifelse(keys %in% names(scopes), scopes[keys], "123")
-  keys[grepl(as.character(stage), scope, fixed = TRUE)]
+  applies <- vapply(scope, function(stages) {
+    as.character(stage) %in% strsplit(stages, "", fixed = TRUE)[[1L]]
+  }, logical(1), USE.NAMES = FALSE)
+  keys[applies]
 }
 
 # ---- stage cfg assembly -----------------------------------------------------
