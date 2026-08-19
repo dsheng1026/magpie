@@ -87,8 +87,8 @@ first, then the MAgPIE team (a meeting is scheduled to learn how to update the t
 leaders settle public hosting later. Interim storage is Di's shared drive, with an
 IIASA-wide model-data share under consideration. If the MAgPIE repository cannot host the
 tarball, the fallback is a public archive release covering MESSAGE R12, R10, India and China
-variants, with the repository pinned to that release. `messageix/inputs/` carries a signpost,
-not data.
+variants, with the repository pinned to that release. `messageix/docs/inputs.md` is a
+signpost; the repository carries no input data.
 
 ### Q7 — Undocumented tarball files and the missing steps
 
@@ -156,9 +156,9 @@ Evidence:
 The one genuine content change — `gms$food` from `anthropometrics_jan18` to
 `anthro_iso_jun22` in `config/projects/scenario_config_genie.csv` — is a fix for an upstream
 bug: at v4.11.0 `modules/15_food/` contains only `anthro_iso_jun22`, so the upstream project
-CSV cannot resolve the food module. Because the preset moves into `messageix/presets/`, the
-fix travels inside the overlay and the upstream CSV stays byte-identical. Worth a one-line
-issue to PIK.
+CSV cannot resolve the food module. This pipeline never loads that CSV — the configuration
+travels in `messageix/experiments.R` — so the upstream file stays byte-identical and nothing
+has to carry the fix. Worth a one-line issue to PIK.
 
 **Operational consequence.** MAgPIE runs mutate tracked files in place — `core/sets.gms`,
 `main.gms`, module `input.gms` and `sets.gms`. **A dirty working tree after a run is normal.**
@@ -187,8 +187,8 @@ Concretely:
 - **Content:** the MESSAGE linkage work is re-applied deliberately into the top-level
   `messageix/` overlay. The `_test` / `_H12` / `_5_SSPs` script copies and the workaround
   commits never enter the branch.
-- **Emulator:** `dsheng1026/MAgPIE_emulator` is merged into `messageix/emulator/` via
-  `git subtree add`, preserving commit history and authorship inside the consolidated branch.
+- **Emulator:** `dsheng1026/MAgPIE_emulator` is merged into the overlay via `git subtree add`,
+  preserving commit history and authorship inside the consolidated branch.
 
 **Attribution.** The hosting decision dissolves most of the problem: the branch lives in Di's
 own fork and the subtree merge carries her emulator history. What remains is that overlay
@@ -201,7 +201,7 @@ Kristine Karstens (PIK) and keeps that credit in the file header.
 **Excluded from the port:** the `bii_spatially_resolved` module and its start script (untested;
 reintroduce later as its own deltas if wanted); workaround commits made unnecessary by a
 correct input tarball; `.RData`; the `_test` / `_H12` / `_5_SSPs` start-script variants, whose
-behaviour is reproduced by preset columns rather than file copies.
+behaviour is reproduced by entries in `messageix/experiments.R` rather than file copies.
 
 ### Deliberate deviations from the specification
 
@@ -212,13 +212,13 @@ spec against the repository does not log them as gaps.
   adding `c44_bii_decrease;0`. The build makes it stage logic instead (`R/utils_config.R`,
   `stage_controlled_switches()`): its value differs by stage — `0` in step 1, `1` in steps 2–3
   when no BII target is imposed — so a single preset row could only be ignored at two stages out
-  of three or break golden-master invariance. A preset that sets it is rejected with a message
-  naming the `pipeline$` key to use instead.
+  of three or break golden-master invariance. An experiment that sets it is rejected, with the
+  lever to use instead named in the message.
 - **No `gms$food` row.** The spec has the `anthropometrics_jan18` → `anthro_iso_jun22` fix
-  travelling inside `messageix/presets/`. There is no bug to carry: the fix existed in
+  travelling inside `messageix/data/`. There is no bug to carry: the fix existed in
   `config/projects/scenario_config_genie.csv`, and that CSV is never loaded by this pipeline
-  (see "The abandoned preset" above). The overlay's preset does not set the food module at all,
-  so MAgPIE's own default resolves.
+  (see "The abandoned preset" above). The overlay sets no food module at all, so MAgPIE's own
+  default resolves.
 
 ### The configuration surface — three tiers (2026-08-19)
 
@@ -227,7 +227,8 @@ queue, polling intervals, output folder names, and a forty-line comment wall exp
 It was honest about what the pipeline does and hostile to a researcher who only wants to change
 a biodiversity target. The surface is now split by who owns each setting. **Narrative** —
 thirteen rows in `presets/narratives.csv`, the settings an experiment varies, in a file Excel
-opens cleanly. **Infrastructure** — everything operational, plus the constants that are
+opens cleanly (superseded the same day by the R constructors — see the next entry).
+**Infrastructure** — everything operational, plus the constants that are
 properties of the linkage rather than of a narrative, as code defaults in
 `R/pipeline_infrastructure.R` with an `MAGPIE_MM_*` environment variable and a `--set
 key=value` on top. **Derived** — the region code, the output folder, the matrix name and the
@@ -238,10 +239,40 @@ overwriting another's runs. Deriving it as `MESSAGEix_<regionscode>[_<column>]` 
 collision impossible by construction, so the warning and the ensemble driver's collision
 machinery both collapse to one assertion. `default` derives to the same names it always had, so
 the pinned runs and `magpie_input_SSP2_ref_woodfuel.csv` are untouched. Every setting is
-documented once, in `docs/parameters.md`, instead of in a comment wall nobody reads inside the
-file they are editing.
+documented once, beside the code that declares it, instead of in a comment wall nobody reads
+inside the file they are editing.
 
 ---
+
+### The interface — experiment declaration plus one command (2026-08-19)
+
+The surface is now two files. `messageix/experiments.R` declares the experiments as R:
+`EXPERIMENTS <- list(default = experiment(narrative(), design()), …)`, where `narrative()` is
+the world a run is made in and `design()` is the sampling plan — the price levels the two
+sweeps visit. `messageix/run.R` is the single command that runs them, with the phases named
+`calibrate` / `price` / `demand` / `reduce` and the patch-tarball builds demoted from scheduled
+steps to packing that happens between phases. This replaces the narrative CSV adopted in the
+18 August review, whose columns-are-narratives format followed the MAgPIE team's own
+convention: three gains decided it — the constructors validate a value at the line it is
+written on rather than at resolution time, a sweep over a setting becomes an `lapply` instead
+of a hand-copied column, and six documented entry scripts collapse to one command whose
+vocabulary is the four phases rather than the six internal steps. The cost is a departure from
+Di Sheng's team's file format, so **raise it with Di Sheng**: the science, the naming and the
+golden runs are untouched, but anyone used to editing the CSV now edits R.
+
+### The levers of the world are a registry (2026-08-19)
+
+The settings `narrative()` accepts are not written into the constructor. They are registered in
+`R/world_levers.R`, one block per lever carrying its meaning, its unit, what it may be, its
+default and how it reaches the model, under one of three mechanism classes: `switch` (a value on
+`cfg$gms`), `data` (files contributed to the tarball packed for one phase) and `structural` (the
+shape of the world, which today is the region set). The reason is the direction of travel: the
+Earth Commission scenario protocol implies levers this pipeline does not have yet — dietary
+patterns, food waste, intensification against extensification, nitrogen-use efficiency,
+protection shares, afforestation modes and their area limits, bioenergy ceilings, regionalized
+trade, maximum food prices. Each of those should be one block and nothing else, so the `data`
+class and the packing hook exist before the first data lever does, and the registry is the only
+place a lever is documented — no second list to keep in step.
 
 ### Run names are ours (2026-08-19)
 
@@ -264,6 +295,31 @@ choice. Golden-master validation compares matrix content on
 against stage-3 runs made before this pipeline, the two matrix scripts take `--layout=legacy`,
 which reads the older folder names without anything being renamed; it produces nothing.
 
+### One folder of code, one folder of data (2026-08-19)
+
+`start/`, `patches/`, `emulator/` and `presets/` are gone. The tree is `experiments.R`, `run.R`,
+`R/` for every piece of internal code, `data/` for the two tables the pipeline ships, and
+`docs/`. The old folders sorted files by the stage of the pipeline they belonged to, which
+stopped being informative once the phases were the vocabulary and the scripts inside them were
+modules rather than drivers: `start/pipeline.R` and `patches/build_step2_patch.R` are as much
+"the pipeline" as `R/utils_paths.R` is. The packing scripts and the two reduce scripts keep
+their own command lines (`R/pack_price.R`, `R/pack_demand.R`, `R/createMatrix_MM.R`,
+`R/add_woodfuel_to_matrix.R`) — that is the debugging surface, and it is unchanged apart from
+the path. `messageix/inputs/README.md` became `docs/inputs.md`, and the emulator's own README
+folded into `docs/pipeline.md` §5 and the two scripts' headers.
+
+### Table work is tidyverse (2026-08-19)
+
+Reading, reshaping and joining tables goes through `readr`, `dplyr`, `tidyr`, `tibble`, `purrr`
+and `stringr`; MAgPIE's own structures (magclass objects, gdx reads, `gms`/`lucode2` calls) stay
+as they are, because they are not data frames. The packages are namespace-qualified rather than
+attached, so sourcing any of this into a session masks nothing. Two places earned it outright:
+the woodfuel step, where a per-cell lookup over 84 runs became one join, and the check on
+intensive variables, where `tapply` became a group-and-summarise a reader can follow. User-facing
+code is exempt in the other direction — `experiments.R` and the examples in the docs are
+constructors and `for` loops, because the person editing them is a land-use scientist, not an R
+programmer.
+
 ---
 
 ### Version pin
@@ -284,10 +340,11 @@ them.
 `SSP2_BD00` — while the step-2.5 extractor was configured with `blV <- c(0.78)`, an `_ALL`
 output directory and an `_ALL` patch destination, i.e. the `SSP2_BD78` narrative whose step-2
 runs the committed scripts do not produce. Running the committed scripts in sequence fails at
-the point the extractor changes into a directory that does not exist. **Fix:** one preset
-drives the BII target, the MP substitution, the folder prefix and the patch destination across
-all three stages and both extractors. For the `default` preset that is `bl = 0`, `mp = 0`,
-`preflag = SSP2_BD00`, golden file `magpie_input_SSP2_ref_woodfuel.csv`.
+the point the extractor changes into a directory that does not exist. **Fix:** one experiment
+drives the BII target, the microbial-protein share, the output folder and the packed inputs
+across all three stages and both packing scripts. For the `default` experiment that is
+`bii_target = 0`, `mp_substitution = 0`, identifier `MESSAGEix_5ff27be8`, golden file
+`magpie_input_SSP2_ref_woodfuel.csv`.
 
 **The `c56_pollutant_prices_nonselect` typo.** The step-3 loop set
 `cfg$gms$c56_pollutant_prices_nonselect` — no such switch exists. The real one,
@@ -312,9 +369,10 @@ strings.
 
 **Module environment.** `emulator.sh` omitted `module load R/4.3.2`, which its sibling loads.
 **Fix:** one configurable environment block for both, with `gcc` loaded last so the compiled
-piam packages resolve `CXXABI_1.3.15`. The list itself lives in the preset and reaches the shell
-wrapper through `messageix/R/utils_env.R`, so `run_matrix.sh` states no module, queue or mail
-address of its own.
+piam packages resolve `CXXABI_1.3.15`. The module list is an infrastructure setting and reaches
+every job script through `messageix/R/utils_env.R`, so no wrapper script states a module, a
+queue or a mail address of its own; the shell wrappers themselves are gone, replaced by
+`messageix/run.R`.
 
 **A shared step-1 run folder across narratives.** The step-1 folder used to sit above the
 narrative folders, so a second narrative's step-1 run could silently overwrite the first's and
@@ -322,24 +380,24 @@ the step-2 patch would be built on the wrong tau. Deriving the identifier per na
 the cross-narrative half of this: each narrative now has its own `output/<identifier>/tau`, and
 one reference tau is no longer shared between them. The remaining exposure is a narrative
 against its own past — a folder is addressed by name, `cfg$force_replace` is `TRUE`, and a
-stage-1 setting may have changed since the folder was filled. **Fix:** step 1 writes
-`messageix_stage1_fingerprint.txt` into its run folder and
-`build_step2_patch.R` refuses to extract tau from a run whose fingerprint disagrees with its
-preset. The folder names are unchanged — they are part of the golden-master artefact — so the
+stage-1 setting may have changed since the folder was filled. **Fix:** the calibrate phase
+writes `messageix_stage1_fingerprint.txt` into its run folder, and packing refuses to extract
+tau from a run whose record disagrees with the experiment it was invoked for. The folder names
+are unchanged — they are part of the golden-master artefact — so the
 collision becomes an error rather than a rename.
 
 **Personal state.** Hard-coded personal cluster paths, a hard-coded mail
 address, `_ALL` / `_LAND` / `_FOOD` literals in bash arrays, dead variables, four-way
-commented-out path variants, and stale references to renamed files are all removed. Narratives
-are preset columns; paths and the R environment come from configuration.
+commented-out path variants, and stale references to renamed files are all removed. A world is
+an `experiment()` entry; paths and the R environment come from configuration.
 
 **The abandoned preset.** `config/projects/scenario_config_genie.csv` is not loaded by any of
 the three pipeline start scripts — they call `setScenario(cfg, "SSP2")` against the stock
 config and then set roughly fifteen parameters inline. Fourteen of the preset's rows were
 therefore **not in effect** in the runs that produced the golden matrix, and several of its
 values are stale (`R32M46-SSP2EU-NPi` is a pre-rev4.119 scenario name). Porting it wholesale
-would change the science silently and break the golden-master test. The `default` preset
-column is built from what the start scripts actually set. Whether the CSV was abandoned
+would change the science silently and break the golden-master test. The `default` experiment is
+built from what the start scripts actually set. Whether the CSV was abandoned
 deliberately on the move to 4.11.0 or is an unnoticed regression is one for Di.
 
 ---
