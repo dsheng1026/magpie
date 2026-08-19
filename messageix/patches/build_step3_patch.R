@@ -1,4 +1,4 @@
-# |  Build the patch tarball stage 3 consumes (pipeline step 2.5).
+# |  Build the patch tarball stage 3 reads. This is the pipeline step patch_step3.
 # |
 # |  Stage 3 imposes bioenergy as a demand trajectory and sweeps the GHG price,
 # |  so it needs two overridden input files:
@@ -14,40 +14,42 @@
 # |      caller-supplied file    ->                                 f56 columns
 # |                              ->  patch_input/<preset>_demand_<hash>.tgz
 # |
-# |  Appending the columns is what makes them selectable: download_and_update()
-# |  reads the scenario column names out of the distributed files and writes
-# |  them into modules/60_bioenergy/*/sets.gms and
-# |  modules/56_ghg_policy/price_aug22/sets.gms, so cfg$gms$c60_2ndgen_biodem =
-# |  "SSP2_BD00_BE10" resolves without anyone editing a set file. Those set
-# |  files are machine-generated; never hand-edit them.
+# |  Appending the columns is what makes them selectable. When MAgPIE unpacks
+# |  input tarballs it reads the scenario column names out of the files that
+# |  arrived and writes them into its own GAMS set files. So a column named
+# |  "default_BE10" appended to f60_bioenergy_dem.cs3 becomes a name
+# |  cfg$gms$c60_2ndgen_biodem can ask for, with nobody editing a set file. Those
+# |  set files are written by the machine; never edit them by hand.
 # |
-# |  THE f56 GENERATOR DOES NOT EXIST. Nothing in dsheng1026/magpie or
-# |  dsheng1026/MAgPIE_emulator constructs the G####exp2110 trajectories, and
-# |  their semantics -- what price level the label denotes, in which year and
-# |  currency, and what growth rate "exp2110" applies out to 2110 -- are not
-# |  recoverable from the surrounding code. This generator therefore takes the
-# |  file from the caller (--f56=PATH), validates it against the preset, and
-# |  stops with a message naming what is missing when it is absent. It does not
-# |  guess: a wrong trajectory would change every one of the 84 stage-3 runs
-# |  while looking entirely plausible.
+# |  Nothing here builds the f56 file. The G####exp2110 GHG price trajectories
+# |  are not generated anywhere in this repository, and what their labels mean --
+# |  which price level, in which year and currency, and what growth rate the
+# |  "exp2110" extension applies out to 2110 -- cannot be worked out from the
+# |  code around them. This step therefore takes the file from whoever runs it
+# |  (--f56=PATH), checks it against the narrative, and stops with a message saying
+# |  what is missing when it is not there. It will not guess: a wrong trajectory
+# |  would change all 84 stage-3 runs while looking entirely plausible.
 # |
 # |  The non-CO2 price cap is not expected inside f56. Supply uncapped
 # |  trajectories: cfg$gms$s56_limit_ch4_n2o_price applies the cap inside GAMS
 # |  to whichever scenario c56_pollutant_prices selects, so changing
-# |  pipeline$nonco2_price_cap_usd17_tc needs no file inside any tarball edited.
+# |  nonco2_price_cap_usd17_tc needs no file inside any tarball edited.
 # |
 # |  Usage
 # |    Rscript messageix/patches/build_step3_patch.R --f56=PATH [flags]   (from the model root)
 # |
 # |    --f56=PATH           f56_pollutant_prices.cs3 carrying the preset's GHG
 # |                         price columns; required
-# |    --preset=NAME        narrative column of the preset CSV (default "default")
-# |    --csv=PATH           preset CSV (default: default_preset_csv())
-# |    --set=key=value      override one preset row; repeatable
+# |    --preset=NAME        narrative column of the narratives file (default "default")
+# |    --csv=PATH           narratives file (default: default_preset_csv())
+# |    --set=key=value      override one setting; repeatable. Any narrative or
+# |                         infrastructure key; see messageix/docs/parameters.md
 # |    --seed=PATH          f60_bioenergy_dem.cs3 to append to (default
 # |                         modules/60_bioenergy/input/f60_bioenergy_dem.cs3,
-# |                         which any prior run's download_and_update() places)
+# |                         which any prior run has already unpacked there)
 # |    --help
+# |
+# |  Every option is accepted as --key=value and as --key value.
 # |
 # |  The tarball name is narrated as ">> PACK: ..." and repeated bare on the
 # |  last line of stdout. In-process callers source this file and use the
@@ -69,53 +71,52 @@
 # |    validate_f56(path, pcfg)             -> invisible(TRUE)
 # |    build_step3_patch(pcfg, f56, seed)   -> chr(1); tarball name
 # |
-# |  Dependencies: magclass, magpie4, messageix/R/utils_config.R,
-# |  messageix/R/utils_runs.R (the solvedness contract, shared with the matrix
-# |  builders) and messageix/patches/build_step2_patch.R for the shared CLI
-# |  parser and pack_patch() -- the two generators write into the same patch
-# |  directory under the same naming and archive-layout contract, and that
-# |  contract is defined once, there. Run from the MAgPIE model root.
+# |  Dependencies: magclass, magpie4, and messageix/patches/build_step2_patch.R
+# |  for pack_patch() and the shared CLI helpers, which brings the messageix/R/
+# |  layer with it (including the solvedness contract shared with the matrix
+# |  builders). The two generators write into the same patch directory under the
+# |  same naming and archive-layout contract, and that contract is defined once,
+# |  there. Run from the MAgPIE model root.
 
-if (!exists("resolve_config", mode = "function")) source("messageix/R/utils_config.R")
-if (!exists("run_modelstat", mode = "function"))  source("messageix/R/utils_runs.R")
-if (!exists("pack_patch", mode = "function"))     source("messageix/patches/build_step2_patch.R")
+# build_step2_patch.R brings the shared packing and CLI helpers, and with them
+# the whole messageix/R/ layer.
+if (!exists("pack_patch", mode = "function")) source("messageix/patches/build_step2_patch.R")
 
 # ---- documented defaults ----------------------------------------------------
 
-# The 5-year grid the bioenergy columns are written on. MAgPIE's t_all runs to
-# 2150 while a run reports only its own time steps, so the grid is wider than
-# any single run's output and the gaps are filled below.
+# The five-year grid the bioenergy columns are written on. MAgPIE's full year set
+# runs to 2150 while a run reports only the time steps it solved, so the grid is
+# wider than any one run's output and the gaps are filled in below.
 GAP_FILL_YEARS <- seq(1995, 2150, by = 5)
 
-# Years at or beyond this one copy the value of this year instead of
-# interpolating: past 2100 there is no later reported year to average against,
-# and holding the level flat is the pipeline's documented convention.
+# Years at or after this one take this year's value instead of being
+# interpolated: past 2100 there is no later reported year to average against, so
+# the level is held flat. That is the documented convention of this pipeline.
 GAP_FILL_HOLD_FROM <- 2100
 
-# Second-generation bioenergy is set to zero over the historical period: the
-# technology is not deployed at scale in these years and MAgPIE harmonises the
-# early years against a reference scenario regardless
-# (modules/60_bioenergy/1st2ndgen_priced_feb24/preloop.gms). A vector of
-# non-zero values can replace HIST_VALUES without any structural change; it is
-# recycled across regions and years the way any magpie assignment is.
+# Second-generation bioenergy is set to zero over the historical period, in
+# mio. GJ per yr. It was not deployed at any scale in these years, and MAgPIE
+# harmonises its early years against a reference path regardless, so the values
+# do not move results. Replacing HIST_VALUES with a vector of non-zero values
+# needs no other change: it is recycled across regions and years.
 HIST_YEARS  <- c("y1995", "y2000", "y2005", "y2010", "y2015")
 HIST_VALUES <- 0
 
-# Second-generation bioenergy variable of magpie4::reportProductionBioenergy.
-# Matched by prefix (pmatch): the report appends units to the variable name.
+# The second-generation bioenergy row of MAgPIE's bioenergy production report.
+# Matched on the start of the name, because the report appends the unit to it.
 BIOENERGY_VARIABLE <- "2nd generation|++"
 
-# EJ per yr -> PJ per yr. reportProductionBioenergy reports EJ; f60_bioenergy_dem
-# is declared in mio. GJ per yr (modules/60_bioenergy/1st2ndgen_priced_feb24/
-# input.gms), and one mio. GJ is one PJ.
+# EJ per yr -> PJ per yr. The bioenergy report comes out in EJ per yr, while
+# f60_bioenergy_dem is declared in mio. GJ per yr, and one mio. GJ is one PJ.
 EJ_TO_PJ <- 1000
 
 # ---- year handling ----------------------------------------------------------
 
-# Fill the years a run did not report. Below hold_from a missing year takes the
-# mean of its two neighbours on the 5-year grid, which requires the later
-# neighbour to be present -- two consecutive gaps are a broken report, not a
-# case to interpolate through, so they stop here rather than propagating NA.
+# Fill in the years a run did not report. Before hold_from, a missing year takes
+# the average of the years either side of it on the five-year grid, so the later
+# one has to be there. Two missing years in a row means a broken report rather
+# than something to interpolate through, and stops here instead of spreading
+# empty values onward.
 gap_fill_years <- function(x, years = GAP_FILL_YEARS, hold_from = GAP_FILL_HOLD_FROM) {
   hold_year <- paste0("y", hold_from)
   for (year in years) {
@@ -142,9 +143,9 @@ gap_fill_years <- function(x, years = GAP_FILL_YEARS, hold_from = GAP_FILL_HOLD_
   x
 }
 
-# Restrict to the grid and put the years in ascending order: add_columns
-# appends, so a filled object carries its new years at the end and the cs3
-# would be written out of order.
+# Keep the grid years only and put them in ascending order. Filled-in years are
+# added at the end, so without this the file would be written with its years out
+# of order.
 sort_years <- function(x, years = GAP_FILL_YEARS) {
   x[, paste0("y", years), ]
 }
@@ -159,15 +160,16 @@ zero_history <- function(x, hist_years = HIST_YEARS, hist_values = HIST_VALUES) 
 
 # ---- the f60 seed -----------------------------------------------------------
 
-# Two f60 scenario columns GAMS dereferences by name whatever the run selects,
-# so a seed missing either fails on an unknown set element:
-#   c60_2ndgen_biodem_noselect  the demand path used in regions outside the
-#                               selected policy set, read from its $setglobal
-#                               default in the module input.gms
-#   R32M46-SSP2EU-NPi           hardcoded in preloop.gms, which harmonises
-#                               every run's early years against it
-# This is why the seed is the base tarball's own file rather than a fresh
-# object holding only the new columns.
+# Two bioenergy demand columns MAgPIE looks up by name in every run, whichever
+# scenario was selected. A starting file missing either one stops the run on an
+# unknown set element:
+#   c60_2ndgen_biodem_noselect  the demand path applied in regions outside the
+#                               selected policy set; its name is MAgPIE's own
+#                               default, read out of the module settings
+#   R32M46-SSP2EU-NPi           the path every run's early years are harmonised
+#                               against, named directly in the model code
+# This is why the new columns are appended to the base tarball's own file rather
+# than written into a fresh one holding only what this step produced.
 seed_required_columns <- function(
     input_gms = "modules/60_bioenergy/1st2ndgen_priced_feb24/input.gms") {
   if (!file.exists(input_gms)) {
@@ -183,68 +185,54 @@ seed_required_columns <- function(
   unique(c(noselect, "R32M46-SSP2EU-NPi"))
 }
 
-# The seed must be the base f60_bioenergy_dem.cs3 as distributed, carrying the
-# columns above and none of the columns this generator is about to append --
-# appending to an already-patched file duplicates set members.
+# The starting file must be f60_bioenergy_dem.cs3 as it comes in the base input
+# tarball: it has to carry the two columns above, and none of the columns this
+# step is about to add. Appending to an already-patched file would list the same
+# scenario name twice.
 assert_seed <- function(seed, pcfg) {
   if (!file.exists(seed)) {
-    log_die("f60 seed not found: ", seed, ". It is the base tarball's own ",
-            "f60_bioenergy_dem.cs3, placed in modules/60_bioenergy/input/ by ",
-            "download_and_update() during any prior run. Run a stage first, or pass --seed=PATH")
+    log_die("the bioenergy demand file to append to was not found: ", seed,
+            ". It is f60_bioenergy_dem.cs3 as it comes in the base input tarballs, which any ",
+            "earlier run has already unpacked into modules/60_bioenergy/input/. Run a stage ",
+            "first so the inputs are unpacked, or name the file with --seed=PATH")
   }
   columns <- magclass::getNames(magclass::read.magpie(seed))
   required <- seed_required_columns()
   absent <- setdiff(required, columns)
   if (length(absent)) {
-    log_die("f60 seed ", seed, " is missing the scenario column(s) ", absent,
-            ", which GAMS dereferences unconditionally; it is not the base tarball's file")
+    log_die("the bioenergy demand file ", seed, " is missing the scenario column(s) ", absent,
+            ", which MAgPIE looks up in every run. This is not the base tarball's own file")
   }
   new_columns <- vapply(pcfg$be_prices, function(be) scen_column(pcfg, be), character(1))
   clash <- intersect(new_columns, columns)
   if (length(clash)) {
-    log_die("f60 seed ", seed, " already carries ", clash,
-            "; seed from the unpatched base file, not from a previously generated patch")
+    log_die("the bioenergy demand file ", seed, " already carries ", clash,
+            ". Start from the unpatched base file, not from one an earlier patch tarball wrote")
   }
   invisible(TRUE)
 }
 
 # ---- stage-2 extraction -----------------------------------------------------
 
-# Every stage-2 run must be present and solved before anything is extracted:
-# a patch built from six of seven runs produces 84 stage-3 runs silently
-# trained on a gap. Problems are collected and reported together so one pass
-# tells the researcher which runs to resubmit.
+# Every stage-2 run has to be there and solved before anything is read out of
+# them. A patch tarball built from six runs out of seven yields 84 stage-3 runs
+# trained on a gap, and nothing downstream can tell. A run whose solve status
+# cannot be read at all counts as unusable here: each of these runs becomes one
+# column of the patch tarball, and a column nobody can vouch for does not belong
+# in it.
 assert_stage2_complete <- function(pcfg) {
   runs <- expected_run_folders(pcfg, 2L)
-  problems <- character(0)
-  for (i in seq_len(nrow(runs))) {
-    gdx <- file.path(runs$folder[i], "fulldata.gdx")
-    if (!dir.exists(runs$folder[i])) {
-      problems <- c(problems, paste0(runs$title[i], ": no run folder ", runs$folder[i]))
-    } else if (!file.exists(gdx)) {
-      problems <- c(problems, paste0(runs$title[i], ": no fulldata.gdx in ", runs$folder[i]))
-    } else {
-      status <- try(assert_run_solved(gdx, runs$title[i]), silent = TRUE)
-      if (inherits(status, "try-error")) {
-        problems <- c(problems, sub("^[^:]*: *", "", conditionMessage(attr(status, "condition"))))
-      }
-    }
-  }
-  if (length(problems)) {
-    log_die("stage 2 is incomplete -- ", length(problems), " of ", nrow(runs),
-            " run(s) unusable:\n  ", paste(problems, collapse = "\n  "))
-  }
-  invisible(TRUE)
+  assert_runs_solved(runs, where = dirname(results_folder(pcfg, 2L)), strict = TRUE,
+                     closing = paste("Re-run or resubmit the listed runs.",
+                                     "No patch tarball is written."))
 }
 
-# Second-generation bioenergy production of one stage-2 run, as the scenario
-# column stage 3 will select with c60_2ndgen_biodem. The column name is
-# unpadded (scen_column), while the run folder token is zero-padded -- both
-# encodings are live and utils_paths.R derives each from the same integer.
+# Second-generation bioenergy production of one stage-2 run, in PJ per yr, named
+# as the column stage 3 will select with c60_2ndgen_biodem.
 extract_bioenergy_column <- function(pcfg, be) {
   folder <- locate_run_folder(pcfg, 2L, be = be)
   if (is.na(folder)) log_die("stage-2 run folder not found: ", run_folder(pcfg, 2L, be = be))
-  gdx <- file.path(folder, "fulldata.gdx")
+  gdx <- file.path(folder, RUN_GDX_FILE)
   report <- magpie4::reportProductionBioenergy(gdx, detail = FALSE, level = "reg")
   report <- report[, , BIOENERGY_VARIABLE, pmatch = TRUE]
   # Exactly one hit, not at least one: a prefix that matched two variables would
@@ -260,8 +248,8 @@ extract_bioenergy_column <- function(pcfg, be) {
   magclass::setNames(report * EJ_TO_PJ, scen_column(pcfg, be))
 }
 
-# Global total of a scenario column in a given year, in EJ per yr -- the
-# structural check on the extracted trajectory.
+# Global total of one scenario column in one year, in EJ per yr. This is the
+# number the checks below are made on.
 global_bioenergy_ej <- function(x, year = "y2100") {
   if (!year %in% magclass::getYears(x)) {
     log_die("global_bioenergy_ej: no ", year, " in the data")
@@ -272,8 +260,9 @@ global_bioenergy_ej <- function(x, year = "y2100") {
 
 # ---- f56 --------------------------------------------------------------------
 
-# The GAMS set of taxable pollutants, read from its declaration rather than
-# copied here: a second copy would drift at the next MAgPIE version bump.
+# The pollutants MAgPIE is able to put a price on, read out of the model's own
+# declaration rather than copied here: a second copy would quietly go out of date
+# at the next MAgPIE version.
 taxable_pollutants <- function(sets_file = "modules/56_ghg_policy/price_aug22/sets.gms") {
   if (!file.exists(sets_file)) {
     log_die("taxable_pollutants: ", sets_file, " not found; run from the MAgPIE model root")
@@ -290,43 +279,46 @@ taxable_pollutants <- function(sets_file = "modules/56_ghg_policy/price_aug22/se
   members
 }
 
-# What the caller has to obtain, and from whom. Deliberately long: this is the
-# one place in the pipeline where a required artefact cannot be rebuilt from
-# the repositories, and a terse "file missing" would send the reader looking
-# for a generator that is not there.
+# What the person running this has to obtain, and from whom. Deliberately long:
+# this is the one input the pipeline cannot rebuild for itself, and a terse
+# "file missing" would send the reader hunting for a generator that does not
+# exist. It is printed as a report rather than raised, because R cuts a stop()
+# message off after about a thousand characters and the instruction at the end of
+# this one is the part that matters.
 f56_missing_message <- function(pcfg) {
   wanted <- vapply(pcfg$ghg_prices, function(g) ghg_scenario(pcfg, g), character(1))
   paste0(
-    "no f56_pollutant_prices.cs3 supplied (--f56=PATH), and this repository cannot generate one.\n",
-    "  Needed: a cs3 file over (t_all, i, pollutants, ghgscen56) in USD17MER per t, carrying\n",
-    "  one column per GHG price level of preset '", pcfg$preset, "':\n    ",
+    ">> FATAL: no GHG price file was given (--f56=PATH), and nothing in this repository\n",
+    "  can build one.\n",
+    "  What is needed: a cs3 file over (t_all, i, pollutants, ghgscen56) in USD17MER per t,\n",
+    "  with one column per GHG price level of narrative '", pcfg$preset, "':\n    ",
     paste(wanted, collapse = ", "), "\n",
-    "  Missing: the trajectory generator. Nothing in dsheng1026/magpie or\n",
-    "  dsheng1026/MAgPIE_emulator builds these columns, and the label semantics -- what\n",
-    "  price level ", wanted[length(wanted)], " denotes, in which year and currency, and what\n",
-    "  growth rate the '", pcfg$ghg_price_scenario_suffix, "' extension applies -- are not\n",
-    "  recoverable from the surrounding code. Reverse-engineering them from the labels would\n",
-    "  change every stage-3 run while looking plausible, so this generator refuses to guess.\n",
-    "  Next step: ask Di Sheng for the generator script, or for the SSP2_demand_cap.tgz\n",
-    "  tarball, and extract f56_pollutant_prices.cs3 from it (tar xzf … f56_pollutant_prices.cs3).\n",
-    "  Then rerun with --f56=<that file>.\n",
-    "  Note: the non-CO2 price cap is NOT expected inside the file. Supply the uncapped\n",
-    "  trajectories -- the cap is applied inside GAMS by cfg$gms$s56_limit_ch4_n2o_price,\n",
-    "  set from pipeline$nonco2_price_cap_usd17_tc (", pcfg$nonco2_price_cap_usd17_tc,
-    " USD17MER per tC for this preset).")
+    "  Why it is not built here: nothing in this repository generates these columns, and what\n",
+    "  their labels mean -- which price level ", wanted[length(wanted)], " stands for, in which year and\n",
+    "  currency, and what growth rate the '", pcfg$ghg_price_scenario_suffix, "' extension applies -- cannot be\n",
+    "  worked out from the code around them. Guessing at them from the labels would change\n",
+    "  every stage-3 run while looking plausible, so this step refuses to guess.\n",
+    "  What to do: ask Di Sheng for the script that builds these trajectories, or for the\n",
+    "  SSP2_demand_cap.tgz tarball, and take f56_pollutant_prices.cs3 out of it\n",
+    "  (tar xzf <tarball> f56_pollutant_prices.cs3). Then run this command again with\n",
+    "  --f56=<that file>.\n",
+    "  One thing to check when you ask: the non-CO2 price cap is NOT expected inside the\n",
+    "  file. The trajectories must be uncapped. The cap is applied inside GAMS by\n",
+    "  cfg$gms$s56_limit_ch4_n2o_price, set from nonco2_price_cap_usd17_tc (",
+    pcfg$nonco2_price_cap_usd17_tc, " USD17MER per tC for this narrative).")
 }
 
-# Check a caller-supplied f56 against the preset before it is packed: a column
-# the stage-3 driver requests but the file lacks fails 84 times in GAMS, one
-# run at a time, hours after submission.
+# Check the supplied GHG price file against the narrative before it is packed. A
+# column stage 3 asks for but the file does not carry fails inside GAMS 84 times
+# over, one run at a time, hours after the runs were submitted.
 #
-# The order of the two sub-dimensions is fixed, not a matter of taste:
-# f56_pollutant_prices(t_all, i, pollutants, ghgscen56) is declared that way in
-# modules/56_ghg_policy/price_aug22/input.gms, and scripts/start_functions.R:78
-# reads the ghgscen56 set out of the distributed file with getNames(..., dim = 2).
-# A transposed file therefore writes pollutant names into ghgscen56 and every
-# c56_pollutant_prices column the stage requests fails to resolve. Hence an
-# assertion on dim 1 rather than a guess at which component is which.
+# The order of the two sub-dimensions is fixed, not a matter of taste. MAgPIE
+# declares the table as f56_pollutant_prices(t_all, i, pollutants, ghgscen56) --
+# pollutant first, scenario second -- and it builds its list of selectable GHG
+# price scenarios by reading the second sub-dimension of whatever file arrives.
+# A file written the other way round therefore turns the pollutant names into
+# the scenario list, and every column stage 3 asks for fails to resolve. Hence
+# the check on the first sub-dimension rather than a guess at which is which.
 validate_f56 <- function(path, pcfg) {
   if (!file.exists(path)) log_die("--f56: file not found: ", path)
   x <- magclass::read.magpie(path)
@@ -342,12 +334,12 @@ validate_f56 <- function(path, pcfg) {
 
   if (!setequal(found_pollutants, pollutants)) {
     if (setequal(found_scenarios, pollutants)) {
-      log_die("--f56: ", path, " is transposed. Its first sub-dimension holds ", found_pollutants,
-              " and its second holds ", found_scenarios,
-              ", but scripts/start_functions.R reads the ghgscen56 set from dim = 2 and the table ",
-              "is declared f56_pollutant_prices(t_all, i, pollutants, ghgscen56). Write the ",
-              "pollutant first: as it stands the pollutant names would become the scenario set ",
-              "and no run could resolve its c56_pollutant_prices column.")
+      log_die("--f56: ", path, " has its two sub-dimensions the wrong way round. The first ",
+              "holds ", found_pollutants, " and the second holds ", found_scenarios,
+              ", but MAgPIE expects the pollutant first and the scenario second, and builds its ",
+              "list of selectable GHG price scenarios from the second one. As written, the ",
+              "pollutant names would become the scenario list and no run could find its ",
+              "c56_pollutant_prices column. Rewrite the file with the pollutant first.")
     }
     absent <- setdiff(pollutants, found_pollutants)
     if (length(absent)) {
@@ -383,9 +375,14 @@ validate_f56 <- function(path, pcfg) {
 #         base tarball's own file in modules/60_bioenergy/input/
 build_step3_patch <- function(pcfg, f56 = NULL, seed = NULL) {
   assert_magpie_root()
-  # The f56 check comes first: it is the one input this repository cannot
-  # produce, and on a fresh tree a seed error would otherwise hide it.
-  if (is.null(f56)) log_die(f56_missing_message(pcfg))
+  # The GHG price file is checked first. It is the one input this repository
+  # cannot produce, and on a fresh checkout a complaint about the bioenergy
+  # starting file would otherwise arrive before it and hide it.
+  if (is.null(f56)) {
+    log_report(f56_missing_message(pcfg))
+    log_die("no GHG price file was given (--f56=PATH). What the file has to contain, and who ",
+            "to ask for it, is printed in full above.")
+  }
   if (is.null(seed)) seed <- "modules/60_bioenergy/input/f60_bioenergy_dem.cs3"
   assert_seed(seed, pcfg)
   validate_f56(f56, pcfg)
@@ -415,24 +412,24 @@ build_step3_patch <- function(pcfg, f56 = NULL, seed = NULL) {
              round(global_bioenergy_ej(column), 2), " EJ per yr global in 2100")
   }
 
-  # The written file, re-read, must agree with what was extracted. Cheap, and
-  # it is the step where a cs3 append silently misaligns years or regions.
+  # Read the file back and check it says what was just written. Cheap, and this
+  # is the point at which an append can silently misalign years or regions.
   written <- magclass::read.magpie(staged_f60)
   written <- written[, , magclass::getNames(columns)]
   delta <- max(abs(global_bioenergy_ej(written) - global_bioenergy_ej(columns)))
   if (delta > 1e-6) {
-    log_die("f60 round-trip mismatch of ", signif(delta, 4),
-            " EJ per yr between the extracted columns and ", staged_f60)
+    log_die("the bioenergy columns read back out of ", staged_f60, " disagree with what was ",
+            "written by ", signif(delta, 4), " EJ per yr. The append misaligned years or regions")
   }
   log_step("CHECK", "f60 carries ", magclass::ndata(written), " new scenario column(s) over ",
            length(magclass::getYears(written)), " years; round-trip agrees")
 
-  # Monotonicity spot check. Every stage-2 run sits at the same zero GHG price,
-  # so the only thing separating these columns is the bioenergy price, and
-  # supply should not fall as that price rises. A warning rather than a stop:
-  # a small inversion can be a solver artefact at a near-flat part of the
-  # response surface, while a large one means the sweep is not measuring what
-  # the stage claims. The numbers are printed so the reader can tell which.
+  # Does supply rise with price? Every stage-2 run sits at the same zero GHG
+  # price, so the only thing separating these columns is the bioenergy price, and
+  # supply should not fall as that price rises. A warning rather than a stop: a
+  # small inversion can be a solver artefact where the response is nearly flat,
+  # while a large one means the sweep is not measuring what the stage claims.
+  # The numbers are printed so the reader can tell which of the two it is.
   totals <- global_bioenergy_ej(columns)
   falls <- which(diff(totals) < 0)
   if (length(falls)) {
@@ -459,35 +456,55 @@ build_step3_patch <- function(pcfg, f56 = NULL, seed = NULL) {
 
 # ---- CLI entry point --------------------------------------------------------
 
+.synopsis_step3 <- paste(
+  "usage: Rscript messageix/patches/build_step3_patch.R --f56=PATH [--preset=NAME]",
+  "[--csv=PATH] [--set=key=value] [--seed=PATH] [--help]")
+
 .usage_step3 <- c(
-  "Build the patch tarball stage 3 consumes: the stage-2 bioenergy demand columns",
-  "appended to f60_bioenergy_dem.cs3, plus a caller-supplied f56_pollutant_prices.cs3,",
-  "packed into <patch_repo>/<preset>_demand_<hash>.tgz.",
+  "Pack the inputs stage 3 reads into one patch tarball: the second-generation",
+  "bioenergy demand the stage-2 runs settled on, one column per bioenergy price level,",
+  "appended to f60_bioenergy_dem.cs3; and the GHG price trajectories, which you supply,",
+  "as f56_pollutant_prices.cs3. Both go into",
+  "<patch_repo>/<preset>_demand_<digest>.tgz.",
   "",
   "  Rscript messageix/patches/build_step3_patch.R --f56=PATH [flags]   (from the MAgPIE model root)",
   "",
-  "  --f56=PATH        f56_pollutant_prices.cs3 carrying the preset's GHG price columns.",
-  "                    Required: this repository holds no generator for those trajectories.",
-  "  --preset=NAME     narrative column of the preset CSV (default: default)",
-  paste0("  --csv=PATH        preset CSV (default: ", default_preset_csv(), ")"),
-  "  --set=key=value   override one preset row; repeatable",
-  "  --seed=PATH       f60_bioenergy_dem.cs3 to append to",
-  "                    (default: modules/60_bioenergy/input/f60_bioenergy_dem.cs3)",
+  "Flags:",
+  "  --f56=PATH        the GHG price trajectories for this narrative, as a cs3 file with",
+  "                    one column per GHG price level. Required, and checked against the",
+  "                    preset before anything is packed: nothing in this repository builds",
+  "                    these trajectories. Run this script without --f56 and it prints",
+  "                    what the file has to contain and who to ask for it.",
+  "  --preset=NAME     narrative column of the narratives file (default: default)",
+  paste0("  --csv=PATH        narratives file (default: ", default_preset_csv(), ")"),
+  "  --set=key=value   override one setting for this build; repeatable. Any narrative or",
+  "                    infrastructure key (bii_target, qos) -- the full list is in",
+  "                    messageix/docs/parameters.md",
+  "  --seed=PATH       the f60_bioenergy_dem.cs3 the new columns are appended to. The",
+  "                    default is the copy any earlier run has already unpacked into",
+  "                    modules/60_bioenergy/input/. It must be the base tarball's own",
+  "                    file, not one an earlier patch tarball wrote.",
   "  --help            this text",
   "",
-  "The tarball name is the last line of stdout.")
+  "Every option is accepted as --key=value and as --key value.",
+  "The tarball name is written as the last line of output, so a script can read it",
+  "with `tail -n 1`. The name carries a digest of the contents: rebuilding the same",
+  "inputs gives the same name, and changed inputs give a new one.")
 
 if (invoked_directly("build_step3_patch.R")) {
-  .argv <- cli_args(commandArgs(trailingOnly = TRUE))
-  if (!is.null(.argv$flags$help)) {
+  .opt <- parse_flags(commandArgs(trailingOnly = TRUE),
+                      known      = c("preset", "csv", "f56", "seed"),
+                      flags      = "help",
+                      repeatable = "set",
+                      aliases    = c("preset-csv" = "csv"),
+                      usage      = .synopsis_step3)
+  if (isTRUE(.opt$help)) {
     cat(.usage_step3, sep = "\n")
+    cat("\n")
   } else {
-    assert_known_flags(.argv$flags, c("preset", "csv", "f56", "seed"), .usage_step3)
-    .preset <- if (is.null(.argv$flags$preset)) "default" else .argv$flags$preset
-    .csv <- if (is.null(.argv$flags$csv)) default_preset_csv() else .argv$flags$csv
-    log_step("CONFIG", "preset '", .preset, "' from ", .csv)
-    .pcfg <- resolve_config(.preset, .csv, cli_overrides(.argv$sets))
-    .name <- build_step3_patch(.pcfg, f56 = .argv$flags$f56, seed = .argv$flags$seed)
+    .pcfg <- config_from_flags(.opt, cli_overrides(.opt$set))
+    log_step("CONFIG", "preset '", .pcfg$preset, "' from ", .pcfg$csv)
+    .name <- build_step3_patch(.pcfg, f56 = .opt$f56, seed = .opt$seed)
     cat(.name, "\n", sep = "")
   }
 }

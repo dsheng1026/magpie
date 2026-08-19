@@ -1,4 +1,4 @@
-# |  Build the patch tarball stage 2 consumes (pipeline step 1.5).
+# |  Build the patch tarball stage 2 reads. This is the pipeline step patch_step2.
 # |
 # |  Stage 2 runs technological change exogenously (cfg$gms$tc = "exo"), which
 # |  means it reads the tau trajectory out of an input file instead of solving
@@ -8,46 +8,49 @@
 # |      stage 1 fulldata.gdx  ->  ov_tau (level)  ->  f13_tau_scenario.csv
 # |                            ->  patch_input/<preset>_price_<hash>.tgz
 # |
-# |  modules/13_tc/exo/realization.gms:14-17 states the contract: the file is
-# |  region and time specific and overwrites the dummy shipped in the base
-# |  tarball. Six MAgPIE project start scripts in this repository export it with
-# |  the same one-liner (scripts/start/projects/paper_peatlandTax.R:183,
-# |  project_BEST.R:171, project_WetHorizons.R:142 and siblings); extract_tau()
-# |  below is that line, unchanged, writing to a staging directory instead of
-# |  straight into modules/13_tc/input/.
+# |  MAgPIE's exogenous technological-change realization expects
+# |  f13_tau_scenario.csv to be region- and time-specific and to replace the
+# |  placeholder file shipped in the base input tarballs. Exporting ov_tau at its
+# |  "level" slice produces exactly that shape, and extract_tau() below does
+# |  nothing more than write it out -- into a staging directory rather than
+# |  straight into modules/13_tc/input/, because the file has to travel in a
+# |  tarball.
 # |
-# |  Why a tarball and not a file copy: MAgPIE's download_and_update() is what
-# |  regenerates the module set files from the distributed inputs, so an input
-# |  that arrives outside a tarball is invisible to that machinery. A patch is
-# |  a plain .tgz in cfg$repositories holding bare file names at the archive
-# |  root; download_distribute() extracts it flat and routes each file to the
-# |  module input/ folder whose input/files manifest names it. A directory
-# |  prefix inside the archive breaks that routing.
+# |  Why a tarball and not a file copy. Unpacking input tarballs is also what
+# |  regenerates MAgPIE's GAMS set files from the data that just arrived. A file
+# |  dropped in by hand never goes through that machinery, so the model would not
+# |  know it was there. A patch tarball is a plain .tgz in one of the directories
+# |  cfg$repositories lists, holding bare file names at the archive root. MAgPIE
+# |  unpacks it flat and sends each file to the module input/ folder whose own
+# |  file manifest claims it; a directory prefix inside the archive hides the
+# |  file from every manifest and it goes nowhere.
 # |
-# |  The tarball name carries an 8-hex digest of its contents
-# |  (utils_paths.R::patch_tarball_name). MAgPIE decides whether to re-extract
-# |  by comparing tarball *names* against input/info.txt, never checksums, so a
-# |  regenerated tarball reusing its old name leaves the model running on stale
-# |  inputs and stale generated sets.gms with nothing in any log to say so.
+# |  Why the name carries a digest. The tarball name ends in an 8-character
+# |  digest of its contents (patch_tarball_name() in utils_paths.R). MAgPIE
+# |  decides whether to unpack again by comparing tarball names against the list
+# |  in input/info.txt, and never looks inside the files, so a rebuilt tarball
+# |  reusing its old name leaves the model on the previous run's data and on
+# |  stale generated set files, with nothing in any log to say so.
 # |
 # |  Usage
 # |    Rscript messageix/patches/build_step2_patch.R [flags]     (from the model root)
 # |
-# |    --preset=NAME        narrative column of the preset CSV (default "default")
-# |    --csv=PATH           preset CSV (default: default_preset_csv())
-# |    --set=key=value      override one preset row; repeatable. Keys are bare
-# |                         pipeline keys ("identifier") or fully qualified
-# |                         ("pipeline$identifier", "gms$c_timesteps")
+# |    --preset=NAME        narrative column of the narratives file (default "default")
+# |    --csv=PATH           narratives file (default: default_preset_csv())
+# |    --set=key=value      override one setting; repeatable. Any narrative or
+# |                         infrastructure key; see messageix/docs/parameters.md
 # |    --gdx=PATH           stage-1 fulldata.gdx, when it is not where the
 # |                         preset's naming contract puts it
-# |    --extra-files=DIR    bundle every file in DIR into the tarball alongside
-# |                         f13_tau_scenario.csv. The seam for a hand-held
-# |                         step-2 patch that carries base-input fixes beyond
-# |                         tau, for files the pinned tarball is stale on; with
-# |                         an up-to-date base tarball the flag is not needed.
-# |                         Files land at the archive root, so DIR must be flat
-# |                         and must not shadow the tau file.
+# |    --extra-files=DIR    also pack every file in DIR into the patch tarball,
+# |                         alongside f13_tau_scenario.csv. Use it to carry a
+# |                         correction to some other input file, for cases where
+# |                         the pinned base tarball is out of date; with a current
+# |                         base tarball it is not needed. The files go in at the
+# |                         archive root, so DIR must hold files only and must not
+# |                         contain a file of its own named f13_tau_scenario.csv.
 # |    --help
+# |
+# |  Every option is accepted as --key=value and as --key value.
 # |
 # |  The tarball name is narrated as ">> PACK: ..." and repeated bare on the
 # |  last line of stdout, so a shell caller can read it with `tail -n 1`.
@@ -57,9 +60,7 @@
 # |      pcfg <- with_patch(pcfg, 2, build_step2_patch(pcfg))
 # |
 # |  Interface
-# |    cli_args(argv)                       -> list(flags, sets); shared CLI parser
 # |    cli_overrides(sets)                  -> named list for resolve_config(overrides=)
-# |    invoked_directly(basename)           -> lgl(1); TRUE when Rscript was given this file
 # |    timestep_years(timesteps)            -> chr; model years of a c_timesteps token
 # |    configured_timesteps(pcfg)           -> chr(1); the preset's c_timesteps token
 # |    pack_patch(files, pcfg, stage)       -> chr(1); tarball name, written to patch_repo
@@ -68,83 +69,38 @@
 # |    stage_extra_files(dir, stage_dir)    -> chr; staged copies of the extra files
 # |    build_step2_patch(pcfg, ...)         -> chr(1); tarball name
 # |
-# |  Dependencies: gdx2, magclass, magpie4, messageix/R/utils_config.R (which
-# |  pulls in utils_log, utils_paths and utils_env) and messageix/R/utils_runs.R
-# |  (solvedness and the stage-1 fingerprint). Run from the MAgPIE model root.
-# |  build_step3_patch.R sources this file for the shared helpers above
-# |  (cli_args, timestep_years, pack_patch) -- the packing contract is one
-# |  contract, not two.
+# |  Dependencies: gdx2, magclass, magpie4 and the messageix/R/ layer (loaded
+# |  through utils_runs.R, which carries the solvedness contract and the stage-1
+# |  fingerprint). Run from the MAgPIE model root. build_step3_patch.R sources
+# |  this file for the shared helpers above (cli_overrides, timestep_years,
+# |  pack_patch) -- the packing contract is one contract, not two.
 
-if (!exists("resolve_config", mode = "function")) source("messageix/R/utils_config.R")
-if (!exists("run_modelstat", mode = "function"))  source("messageix/R/utils_runs.R")
+# One line loads the whole messageix/R/ layer: each file there loads the files it
+# needs itself, and utils_runs.R sits at the bottom of that chain.
+if (!exists("run_modelstat", mode = "function")) source("messageix/R/utils_runs.R")
 
 # ---- CLI --------------------------------------------------------------------
 
-# Parse "--key=value" arguments into a named list, collecting the repeatable
-# "--set key=value" form separately. Unknown *shapes* stop here; unknown *keys*
-# are the calling script's business, because the two generators take different
-# flags and a typo must not be swallowed.
-cli_args <- function(argv) {
-  out <- list(flags = list(), sets = character(0))
-  for (arg in argv) {
-    if (arg %in% c("--help", "-h")) {
-      out$flags$help <- "TRUE"
-      next
-    }
-    if (!grepl("^--[A-Za-z0-9][A-Za-z0-9-]*=", arg)) {
-      log_die("unrecognised argument '", arg, "'; arguments take the form --key=value. Try --help")
-    }
-    key <- sub("^--([^=]+)=.*$", "\\1", arg)
-    value <- sub("^--[^=]+=", "", arg)
-    if (identical(key, "set")) {
-      if (!grepl("=", value, fixed = TRUE)) {
-        log_die("--set takes key=value, got '", value, "'")
-      }
-      out$sets <- c(out$sets, value)
-    } else {
-      out$flags[[key]] <- value
-    }
-  }
-  out
-}
-
-# The --set values as the named list resolve_config() takes. Values stay
-# character: resolve_config coerces them through the same path as a CSV cell,
-# so a command-line vector is comma-joined exactly like one.
+# The repeatable "--set key=value" values as the named list resolve_config()
+# takes. Values stay character: resolve_config coerces them through the same
+# path as a CSV cell, so a command-line vector is comma-joined exactly like one.
 cli_overrides <- function(sets) {
   if (!length(sets)) return(list())
+  shapeless <- sets[!grepl("=", sets, fixed = TRUE)]
+  if (length(shapeless)) log_die("--set takes key=value, got '", shapeless[1L], "'")
   keys <- sub("=.*$", "", sets)
   values <- sub("^[^=]+=", "", sets)
-  if (any(!nzchar(keys))) log_die("--set: empty key")
+  if (any(!nzchar(keys))) log_die("--set: no key before the '=' in '", sets[!nzchar(keys)][1L], "'")
   stats::setNames(as.list(values), keys)
-}
-
-# TRUE when Rscript was handed this very file, FALSE when another script
-# sourced it. Guards the CLI block at the foot of the file.
-invoked_directly <- function(basename_expected) {
-  args <- commandArgs(trailingOnly = FALSE)
-  file_arg <- sub("^--file=", "", args[grepl("^--file=", args)])
-  length(file_arg) == 1L && identical(basename(file_arg), basename_expected)
-}
-
-# Flags a generator accepts; anything else is a typo and stops the run before
-# a long extraction. `known` excludes "set", which cli_args() removes.
-assert_known_flags <- function(flags, known, usage) {
-  unknown <- setdiff(names(flags), c(known, "help"))
-  if (length(unknown)) {
-    cat(usage, sep = "\n")
-    log_die("unknown flag(s): --", paste(unknown, collapse = ", --"))
-  }
-  invisible(TRUE)
 }
 
 # ---- model years ------------------------------------------------------------
 
-# Model years of a c_timesteps token, read from the set definition of `t` in
-# core/sets.gms. Parsed rather than tabulated here: the timestep sets are part
-# of upstream MAgPIE, and a second copy would drift at the next version bump.
-# (The spatial sets in the same file are machine-generated per input tarball;
-# the timestep sets are not.)
+# The model years a c_timesteps token stands for -- "coup2110" and its siblings
+# each name a list of years. The list is read out of MAgPIE's own set definitions
+# rather than copied here, because a second copy would quietly go out of date at
+# the next MAgPIE version. (The region sets in the same file are rebuilt from
+# each input tarball; the year sets are not.)
 timestep_years <- function(timesteps, sets_file = "core/sets.gms") {
   if (!file.exists(sets_file)) {
     log_die("timestep_years: ", sets_file, " not found; run from the MAgPIE model root")
@@ -165,31 +121,27 @@ timestep_years <- function(timesteps, sets_file = "core/sets.gms") {
 }
 
 # The c_timesteps token the patch is validated against. It comes from the preset
-# and only from the preset: resolve_config() requires the row, because the
-# $setglobal in main.gms is rewritten by apply_cfg() on every run and would tie
-# this patch to whichever run last touched the working tree.
-configured_timesteps <- function(pcfg) {
-  timesteps <- pcfg$gms[["c_timesteps"]]
-  if (is.null(timesteps) || !nzchar(as.character(timesteps))) {
-    log_die("configured_timesteps: preset '", pcfg$preset, "' sets no gms$c_timesteps")
-  }
-  as.character(timesteps)
-}
+# and only from the preset, which is why resolving a preset already refuses a
+# column that leaves the row out: the model horizon written into the working
+# tree is rewritten by every run, so reading it from there would validate a
+# patch against whichever run happened to be last.
+configured_timesteps <- function(pcfg) as.character(pcfg$gms[["c_timesteps"]])
 
 # ---- packing ----------------------------------------------------------------
 
-# Pack staged files into patch_repo_dir() under a content-hashed name and
-# return that name.
+# Pack the staged files into patch_repo_dir() under a name that carries a digest
+# of their contents, and return that name.
 #
-# Members carry bare file names because download_distribute() extracts a patch
-# flat and routes each file by the module input/files manifest that claims it;
-# a directory prefix hides the file from every manifest. Hence the single
-# staging directory and the tar -C.
+# The files go in under bare names, with no directory above them, because MAgPIE
+# unpacks a patch tarball flat and then sends each file to the module folder
+# whose own file manifest claims it. A directory prefix hides the file from every
+# manifest. That is why everything is staged into one directory first and tar is
+# pointed at it with -C.
 #
-# The archive bytes are not reproducible (gzip stores a timestamp) but the
-# *name* is: patch_tarball_name() hashes the staged file contents, so
-# regenerating identical inputs yields the identical name and MAgPIE correctly
-# skips the re-extraction.
+# The bytes of the archive are not reproducible -- gzip records the time of
+# writing -- but the name is, because the digest is taken over the staged file
+# contents rather than the archive. Rebuilding from identical inputs therefore
+# yields an identical name, and MAgPIE rightly skips unpacking it again.
 pack_patch <- function(files, pcfg, stage) {
   if (!length(files)) log_die("pack_patch: nothing to pack")
   absent <- files[!file.exists(files)]
@@ -220,13 +172,11 @@ pack_patch <- function(files, pcfg, stage) {
 
 # ---- tau --------------------------------------------------------------------
 
-# Export the stage-1 tau trajectory. This is the export idiom of
-# scripts/start/projects/paper_peatlandTax.R:183 verbatim, except that the
-# destination is a staging directory rather than modules/13_tc/input/:
-# ov_tau(t,h,tautype,type) selected at type="level" has exactly the shape of
-# f13_tau_scenario(t_all,h,tautype) declared at modules/13_tc/exo/input.gms:31.
-# No file_type is passed -- write.magpie derives the layout from the .csv
-# extension, and that layout is what the $include in input.gms parses.
+# Write the stage-1 tau trajectory out as a csv. ov_tau(t, h, tautype, type)
+# taken at type = "level" has exactly the shape MAgPIE declares for
+# f13_tau_scenario(t_all, h, tautype), so no reshaping is needed. No file_type is
+# given: write.magpie picks the layout from the .csv extension, and that layout
+# is the one GAMS reads back in.
 extract_tau <- function(gdx, out_csv) {
   tau <- gdx2::readGDX(gdx, "ov_tau", select = list(type = "level"))
   if (is.null(tau)) log_die("extract_tau: no ov_tau in ", gdx)
@@ -235,12 +185,13 @@ extract_tau <- function(gdx, out_csv) {
   tau
 }
 
-# Two failure modes that GAMS reports far from their cause, caught here where
-# the message can name the file that has to change.
-#   - a non-positive tau makes modules/13_tc/exo/presolve.gms:11-13 abort with
-#     "tau value of 0 detected in at least one region!"
-#   - a missing model year leaves f13_tau_scenario at its GAMS default of zero
-#     for that year, which is the same abort one step later
+# Two ways this file can be wrong that GAMS only reports much later, and far
+# from the cause. Catching them here means the message can name the file that
+# has to change.
+#   - a tau value of zero or below stops the stage-2 runs outright: MAgPIE
+#     aborts with "tau value of 0 detected in at least one region!"
+#   - a model year missing from the file is read by GAMS as zero for that year,
+#     which is the same abort one step later
 validate_tau <- function(tau, years) {
   values <- as.vector(tau)
   if (any(is.na(values))) log_die("validate_tau: tau contains NA")
@@ -298,12 +249,12 @@ build_step2_patch <- function(pcfg, extra_dir = NULL, gdx = NULL) {
       log_die("stage-1 run folder not found: ", run_folder(pcfg, 1L),
               ". Run the stage-1 driver first, or pass --gdx=PATH")
     }
-    gdx <- file.path(folder, "fulldata.gdx")
+    gdx <- file.path(folder, RUN_GDX_FILE)
   } else {
     folder <- dirname(gdx)
   }
   if (!file.exists(gdx)) {
-    log_die("stage-1 fulldata.gdx not found: ", gdx,
+    log_die("stage-1 ", RUN_GDX_FILE, " not found: ", gdx,
             ". The run folder exists but holds no solved run")
   }
   log_step("EXTRACT", "tau from ", gdx)
@@ -341,36 +292,54 @@ build_step2_patch <- function(pcfg, extra_dir = NULL, gdx = NULL) {
 
 # ---- CLI entry point --------------------------------------------------------
 
+.synopsis_step2 <- paste(
+  "usage: Rscript messageix/patches/build_step2_patch.R [--preset=NAME] [--csv=PATH]",
+  "[--set=key=value] [--gdx=PATH] [--extra-files=DIR] [--help]")
+
 .usage_step2 <- c(
-  "Build the patch tarball stage 2 consumes: the stage-1 tau trajectory as",
-  "f13_tau_scenario.csv, packed into <patch_repo>/<preset>_price_<hash>.tgz.",
+  "Pack the land-use intensity trajectory (tau) of the stage-1 run into the patch",
+  "tarball stage 2 reads. Stage 2 holds that trajectory fixed instead of solving for",
+  "it, and reads it as f13_tau_scenario.csv out of",
+  "<patch_repo>/<preset>_price_<digest>.tgz.",
   "",
   "  Rscript messageix/patches/build_step2_patch.R [flags]   (from the MAgPIE model root)",
   "",
-  "  --preset=NAME       narrative column of the preset CSV (default: default)",
-  paste0("  --csv=PATH          preset CSV (default: ", default_preset_csv(), ")"),
-  "  --set=key=value     override one preset row; repeatable",
-  "  --gdx=PATH          stage-1 fulldata.gdx, if not at the preset's run folder",
-  "  --extra-files=DIR   also bundle every file in DIR (flat) into the tarball.",
-  "                      The seam for a hand-held step-2 patch that carries base-input",
-  "                      fixes beyond tau; unnecessary with an up-to-date base tarball.",
+  "Flags:",
+  "  --preset=NAME       narrative column of the narratives file (default: default)",
+  paste0("  --csv=PATH          narratives file (default: ", default_preset_csv(), ")"),
+  "  --set=key=value     override one setting for this build; repeatable. Any narrative",
+  "                      or infrastructure key (bii_target, qos) -- the full list is in",
+  "                      messageix/docs/parameters.md",
+  paste0("  --gdx=PATH          the stage-1 ", RUN_GDX_FILE,
+         ", when it is not in the run folder the"),
+  "                      preset's names point at",
+  "  --extra-files=DIR   also pack every file in DIR into the patch tarball, alongside",
+  "                      the trajectory. This is the way to carry a correction to some",
+  "                      other input file; not needed when the base input tarballs are",
+  "                      current. The directory must hold files only, no sub-directories.",
   "  --help              this text",
   "",
-  "The tarball name is the last line of stdout.")
+  "Every option is accepted as --key=value and as --key value.",
+  "The tarball name is written as the last line of output, so a script can read it",
+  "with `tail -n 1`. The name carries a digest of the contents: rebuilding the same",
+  "inputs gives the same name, and changed inputs give a new one.")
 
 if (invoked_directly("build_step2_patch.R")) {
-  .argv <- cli_args(commandArgs(trailingOnly = TRUE))
-  if (!is.null(.argv$flags$help)) {
+  .opt <- parse_flags(commandArgs(trailingOnly = TRUE),
+                      known      = c("preset", "csv", "gdx", "extra-files"),
+                      flags      = "help",
+                      repeatable = "set",
+                      aliases    = c("preset-csv" = "csv"),
+                      usage      = .synopsis_step2)
+  if (isTRUE(.opt$help)) {
     cat(.usage_step2, sep = "\n")
+    cat("\n")
   } else {
-    assert_known_flags(.argv$flags, c("preset", "csv", "gdx", "extra-files"), .usage_step2)
-    .preset <- if (is.null(.argv$flags$preset)) "default" else .argv$flags$preset
-    .csv <- if (is.null(.argv$flags$csv)) default_preset_csv() else .argv$flags$csv
-    log_step("CONFIG", "preset '", .preset, "' from ", .csv)
-    .pcfg <- resolve_config(.preset, .csv, cli_overrides(.argv$sets))
+    .pcfg <- config_from_flags(.opt, cli_overrides(.opt$set))
+    log_step("CONFIG", "preset '", .pcfg$preset, "' from ", .pcfg$csv)
     .name <- build_step2_patch(.pcfg,
-                               extra_dir = .argv$flags[["extra-files"]],
-                               gdx = .argv$flags$gdx)
+                               extra_dir = .opt[["extra-files"]],
+                               gdx = .opt$gdx)
     cat(.name, "\n", sep = "")
   }
 }
