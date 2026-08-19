@@ -1,20 +1,19 @@
-# |  Everything the pipeline needs that is not a narrative setting.
+# |  Everything the pipeline needs that an experiment does not say.
 # |
-# |  Three kinds of value live here, and none of them belongs in the narratives
-# |  file:
+# |  Three kinds of value live here, and none of them belongs in an experiment:
 # |
 # |    region set     which input tarballs and which region-name table a region
 # |                   set is made of. One entry per region set.
 # |    infrastructure operational settings -- queue, modules, waiting, output
 # |                   names -- plus a handful of science-adjacent constants that
-# |                   are properties of the linkage rather than of a narrative.
+# |                   are properties of the linkage rather than of an experiment.
 # |                   Each has a built-in default, an environment variable that
 # |                   overrides it per machine, and a "--set key=value" that
 # |                   overrides it for one command.
-# |    derivation     the rules that turn a narrative into the names its runs and
-# |                   its matrix carry. Derived values are read-only: setting one
-# |                   is an error, because two narratives could then land on the
-# |                   same folder.
+# |    derivation     the rules that turn an experiment into the names its runs
+# |                   and its matrix carry. Derived values are read-only: setting
+# |                   one is an error, because two experiments could then land on
+# |                   the same folder.
 # |
 # |  Interface
 # |    region_sets()                        -> named list; every region set known
@@ -23,8 +22,8 @@
 # |    infrastructure_defaults()            -> named list; defaults with environment overrides applied
 # |    derived_keys()                       -> chr; keys nothing may set
 # |    regionscode_of(tarball)              -> chr(1); the region set's code, out of the tarball name
-# |    narrative_identifier(regionscode, column) -> chr(1); the output folder name
-# |    narrative_matrix_basename(ssp, column)    -> chr(1); the matrix CSV name, no extension
+# |    experiment_identifier(regionscode, experiment) -> chr(1); the output folder name
+# |    experiment_matrix_basename(ssp, experiment)    -> chr(1); the matrix CSV name, no extension
 # |
 # |  Dependencies: base R and messageix/R/utils_log.R.
 
@@ -35,11 +34,11 @@ if (!exists("log_die", mode = "function")) source("messageix/R/utils_log.R")
 # A region set is the set of world regions MAgPIE solves for. Everything that
 # has to agree with it travels together here: the four input tarballs carrying
 # data cut to those regions, and the table translating MAgPIE's region codes
-# into the names MESSAGEix uses. A narrative names the set; it never names the
+# into the names MESSAGEix uses. An experiment names the set; it never names the
 # files.
 #
 # Adding a region set is one entry here plus its region-name table in
-# messageix/presets/. Nothing else in the pipeline knows region sets exist.
+# messageix/data/. Nothing else in the pipeline knows region sets exist.
 region_sets <- function() {
   list(
     R12 = list(
@@ -69,7 +68,7 @@ region_set_inputs <- function(set) {
     log_die("region_set '", set, "' is not a region set this pipeline knows. It knows: ",
             paste(names(known), collapse = ", "),
             ". Adding one is a new entry in messageix/R/pipeline_infrastructure.R plus its ",
-            "region-name table in messageix/presets/.")
+            "region-name table in messageix/data/.")
   }
   known[[set]]
 }
@@ -77,7 +76,7 @@ region_set_inputs <- function(set) {
 # ---- infrastructure ---------------------------------------------------------
 
 # Every operational setting, with the environment variable that overrides it on
-# a machine that needs something else. Types are those of the preset reader:
+# a machine that needs something else. Types are those an experiment uses:
 # "chr", "num", "lgl", "chr_vec", "num_vec".
 #
 # Resolution order: the default here, then the environment variable, then a
@@ -91,10 +90,10 @@ infrastructure_spec <- function() {
       unit = "cfg$gms$c_timesteps: which years the model solves for. coup2110 rather than MAgPIE's coup2100 because MESSAGEix runs to 2110. The patch steps check their output against the model years of this token"),
     bioenergy_dem_min = list(
       default = 0, type = "num", env = "MAGPIE_MM_BIOENERGY_DEM_MIN",
-      unit = "mio. GJ per yr, cfg$gms$s60_2ndgen_bioenergy_dem_min at stages 2 and 3. Zero so the low end of the demand sweep is not truncated; MAgPIE's default of 1 would put a floor under it"),
+      unit = "mio. GJ per yr, cfg$gms$s60_2ndgen_bioenergy_dem_min in the price and demand sweeps. Zero so the low end of the demand sweep is not truncated; MAgPIE's default of 1 would put a floor under it"),
     bioenergy_1st_subsidy = list(
       default = 0, type = "num", env = "MAGPIE_MM_BIOENERGY_1ST_SUBSIDY",
-      unit = "USD17MER per GJ, cfg$gms$s60_bioenergy_1st_subsidy at stages 2 and 3. Must be zero, or it acts as a price floor underneath the bioenergy price sweep; MAgPIE's default is 6.5"),
+      unit = "USD17MER per GJ, cfg$gms$s60_bioenergy_1st_subsidy in the price and demand sweeps. Must be zero, or it acts as a price floor underneath the bioenergy price sweep; MAgPIE's default is 6.5"),
 
     # --- science-adjacent constants of the linkage ---
     currency_2005_to_2017 = list(
@@ -102,13 +101,13 @@ infrastructure_spec <- function() {
       unit = "USD2005 -> USD2017 MER deflator. It multiplies the bioenergy price sweep on the way into MAgPIE, and its reciprocal (0.81300813) converts prices back out again in MM_linkage_mapping.csv. It moves when MAgPIE's base year moves, so revisit it at every MAgPIE version bump -- and move both numbers together"),
     biodem_scenario_step1 = list(
       default = "R34M410-SSP2-NPi2025", type = "chr", env = "MAGPIE_MM_BIODEM_SCENARIO_STEP1",
-      unit = "cfg$gms$c60_2ndgen_biodem in stage 1: the business-as-usual second-generation bioenergy demand path the reference land-use intensity trajectory is calibrated against"),
+      unit = "cfg$gms$c60_2ndgen_biodem in the calibrate phase: the business-as-usual second-generation bioenergy demand path the reference land-use intensity trajectory is calibrated against"),
     ghg_price_scenario_step2 = list(
       default = "SSPDB-SSP2-Ref-MESSAGE-GLOBIOM", type = "chr", env = "MAGPIE_MM_GHG_PRICE_SCENARIO_STEP2",
-      unit = "cfg$gms$c56_pollutant_prices in stage 2. This one is zero in every region and every period, so the bioenergy price is the only signal stage 2 varies"),
+      unit = "cfg$gms$c56_pollutant_prices in the price sweep. This one is zero in every region and every period, so the bioenergy price is the only signal that sweep varies"),
     ghg_price_scenario_suffix = list(
       default = "exp2110", type = "chr", env = "MAGPIE_MM_GHG_PRICE_SCENARIO_SUFFIX",
-      unit = "suffix on the stage-3 GHG price scenario names, recording how the trajectory is extended past the last reported year. exp2110: extended exponentially to 2110"),
+      unit = "suffix on the demand sweep's GHG price scenario names, recording how the trajectory is extended past the last reported year. exp2110: extended exponentially to 2110"),
 
     # --- inputs beyond the region set ---
     input_calibration = list(
@@ -126,10 +125,10 @@ infrastructure_spec <- function() {
     # --- waiting between stages ---
     poll_seconds = list(
       default = 300, type = "num", env = "MAGPIE_MM_POLL_SECONDS",
-      unit = "seconds between checks while the pipeline waits for a stage's runs to finish. Each check reads the model status out of every finished run, so it is not free; runs take hours and five minutes resolves them finely enough"),
+      unit = "seconds between checks while the pipeline waits for a phase's runs to finish. Each check reads the model status out of every finished run, so it is not free; runs take hours and five minutes resolves them finely enough"),
     timeout_hours = list(
       default = 48, type = "num", env = "MAGPIE_MM_TIMEOUT_HOURS",
-      unit = "hours the pipeline waits for one stage before giving up. 48 covers the 84-run stage-3 sweep queued behind other work; a stage still unfinished after that needs a person, not more waiting"),
+      unit = "hours the pipeline waits for one phase of runs before giving up. 48 covers the 84-run demand sweep queued behind other work; a phase still unfinished after that needs a person, not more waiting"),
 
     # --- execution environment ---
     qos = list(
@@ -157,7 +156,7 @@ infrastructure_spec <- function() {
 
 # Every infrastructure key with its default, and the environment variable in
 # place of it where one is set. Values stay as they are written in the
-# environment; the preset reader coerces them to the declared type.
+# environment; resolving an experiment coerces them to the declared type.
 infrastructure_defaults <- function() {
   spec <- infrastructure_spec()
   values <- lapply(names(spec), function(key) {
@@ -170,15 +169,15 @@ infrastructure_defaults <- function() {
 # ---- derived values ---------------------------------------------------------
 
 # Keys the pipeline works out for itself. Nothing may set them: they are what
-# keeps two narratives out of each other's folders, and a narrative that could
-# choose its own would be able to choose another's.
+# keeps two experiments out of each other's folders, and an experiment that
+# could choose its own would be able to choose another's.
 derived_keys <- function() {
   c("regionscode", "identifier", "matrix_basename", "region_names",
     "input_regional", "input_cellular", "input_validation", "input_additional")
 }
 
 # The region set's code, read out of the regional tarball's name. MAgPIE stamps
-# the code into the name when it builds the tarball, so the tarball a narrative
+# the code into the name when it builds the tarball, so the tarball an experiment
 # runs on is the one thing that always knows which regions it holds.
 regionscode_of <- function(tarball) {
   code <- sub("^rev[0-9.]+_([0-9a-z]+)_magpie\\.tgz$", "\\1", basename(tarball))
@@ -190,19 +189,19 @@ regionscode_of <- function(tarball) {
   code
 }
 
-# The top-level output folder of one narrative. The region code is in it because
-# runs at different region resolutions are different runs; the column name is in
-# it because run folder names below carry only the SSP and the biodiversity
-# target, so two narratives differing in anything else would otherwise overwrite
-# each other. The `default` narrative carries no column token, which is what
+# The top-level output folder of one experiment. The region code is in it
+# because runs at different region resolutions are different runs; the
+# experiment's name is in it because the run folder names below carry only the
+# position in the sweep, so two experiments would otherwise overwrite each
+# other. The experiment named `default` carries no name token, which is what
 # keeps the pinned runs where they have always been.
-narrative_identifier <- function(regionscode, column) {
-  if (identical(column, "default")) paste0("MESSAGEix_", regionscode)
-  else paste0("MESSAGEix_", regionscode, "_", column)
+experiment_identifier <- function(regionscode, experiment) {
+  if (identical(experiment, "default")) paste0("MESSAGEix_", regionscode)
+  else paste0("MESSAGEix_", regionscode, "_", experiment)
 }
 
-# The matrix CSV one narrative writes, without the extension. The woodfuel half
-# of the matrix step appends _woodfuel to it.
-narrative_matrix_basename <- function(ssp, column) {
-  paste0("magpie_input_", ssp, "_", if (identical(column, "default")) "ref" else column)
+# The matrix CSV one experiment writes, without the extension. The woodfuel half
+# of the reduce phase appends _woodfuel to it.
+experiment_matrix_basename <- function(ssp, experiment) {
+  paste0("magpie_input_", ssp, "_", if (identical(experiment, "default")) "ref" else experiment)
 }

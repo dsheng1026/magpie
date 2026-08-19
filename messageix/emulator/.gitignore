@@ -1,6 +1,0 @@
-# SLURM job logs, written to the submit directory
-*.log
-# matrix output, when MATRIX_DIR points here rather than at output/
-magpie_input_*.csv
-# the mapping is data the pipeline needs; the model root ignores *.cs*
-!MM_linkage_mapping.csv

@@ -5,7 +5,7 @@
 # |  for, so re-running a stage lands in the same place and no crosswalk file is
 # |  needed.
 # |
-# |  One narrative, one folder. Everything a narrative varies is in the
+# |  One experiment, one folder. Everything an experiment varies is in the
 # |  identifier it is given, so the names below it need carry only the position
 # |  in the sweep:
 # |
@@ -37,6 +37,8 @@
 # |    scen_column(pcfg, be)                -> chr; "default_BE05"
 # |    ghg_scenario(pcfg, ghg)              -> chr; "G0400exp2110"
 # |    stage_token(stage)                   -> chr(1); 1|2|3 -> "tau"|"price"|"demand"
+# |    phase_of_stage(stage)                -> chr(1); the phase name a stage runs under
+# |    stage_of_phase(phase)                -> int(1); the stage a phase name stands for
 # |    run_title(pcfg, stage, be, ghg)      -> chr(1); cfg$title for one run
 # |    results_folder(pcfg, stage)          -> chr(1); cfg$results_folder template with :title:
 # |    run_folder(pcfg, stage, be, ghg)     -> chr(1); concrete run directory, repo-relative
@@ -44,11 +46,12 @@
 # |    expected_run_folders(pcfg, stage)    -> data.frame(be, ghg, title, folder)
 # |    matrix_grid(pcfg, run_dir, layout)   -> data.frame(be, ghg, title, folder); matrix row order
 # |    content_hash(files)                  -> chr(1); lower-case hex digest of file contents
-# |    patch_tarball_name(preset, stage, files) -> chr(1); "<preset>_<stage>_<hash>.tgz"
+# |    patch_tarball_name(experiment, stage, files) -> chr(1); "<experiment>_<stage>_<hash>.tgz"
 # |
-# |  Dependencies: base R (tools, utils) and messageix/R/utils_log.R. region_rename()
-# |  additionally uses presets_dir() and read_pipeline_csv() from utils_config.R,
-# |  which are loaded by the time any resolved preset exists.
+# |  Dependencies: base R (tools), tibble/dplyr/tidyr/purrr, and
+# |  messageix/R/utils_log.R. region_rename()
+# |  additionally uses data_dir() and read_pipeline_csv() from utils_config.R,
+# |  which are loaded by the time any resolved experiment exists.
 
 if (!exists("log_die", mode = "function")) source("messageix/R/utils_log.R")
 
@@ -85,16 +88,16 @@ ghg_scen_tag <- function(ghg) paste0("GHG", pad_int(ghg, 3L))
 
 # ---- region names -----------------------------------------------------------
 
-# The table of region names this narrative works in. It comes with the region
+# The table of region names this experiment works in. It comes with the region
 # set, so it cannot disagree with the input tarballs. A bare file name is a file
-# in messageix/presets/; a name with a directory in it is used as given, so a
+# in messageix/data/; a name with a directory in it is used as given, so a
 # table kept outside the repository also works.
 region_names_file <- function(pcfg) {
   name <- as.character(pcfg$region_names)
   if (!length(name) || !nzchar(name)) {
     log_die("region set '", pcfg$region_set, "' names no region-name table")
   }
-  if (identical(basename(name), name)) file.path(presets_dir(), name) else name
+  if (identical(basename(name), name)) file.path(data_dir(), name) else name
 }
 
 # Read once per file, not once per run: the woodfuel step asks for this table
@@ -121,7 +124,7 @@ region_rename <- function(pcfg) {
   if (!file.exists(path)) {
     log_die("region-name table not found: ", path, ". Region set '", pcfg$region_set,
             "' names '", pcfg$region_names, "', and a bare file name is looked for in ",
-            presets_dir())
+            data_dir())
   }
   tab <- read_pipeline_csv(path, "region-name table")
   if (ncol(tab) < 2L) {
@@ -143,13 +146,13 @@ region_rename <- function(pcfg) {
 
 # ---- scenario column names --------------------------------------------------
 
-# Column name of the second-generation bioenergy demand trajectory that stage 2
-# writes into f60_bioenergy_dem.cs3 and stage 3 selects with c60_2ndgen_biodem.
-# It carries the narrative's name so that one glance at the file says which
-# experiment the column belongs to, and the same padded price token the run
-# folder uses so the two cannot disagree.
+# Column name of the second-generation bioenergy demand trajectory that the
+# price sweep writes into f60_bioenergy_dem.cs3 and the demand sweep selects
+# with c60_2ndgen_biodem. It carries the experiment's name so that one glance at
+# the file says which experiment the column belongs to, and the same padded
+# price token the run folder uses so the two cannot disagree.
 scen_column <- function(pcfg, be) {
-  paste0(pcfg$preset, "_", be_token(be))
+  paste0(pcfg$experiment, "_", be_token(be))
 }
 
 # Column name of the GHG price trajectory in f56_pollutant_prices.cs3. The
@@ -169,6 +172,21 @@ stage_token <- function(stage) {
   tokens[stage]
 }
 
+# The phase a stage runs under, in the words the command line uses: the
+# reference run is calibrate, the two sweeps are price and demand.
+phase_of_stage <- function(stage) c("calibrate", "price", "demand")[.as_stage(stage)]
+
+# The other way round: the stage a phase name stands for.
+stage_of_phase <- function(phase) {
+  phases <- c("calibrate", "price", "demand")
+  hit <- match(as.character(phase)[1L], phases)
+  if (is.na(hit)) {
+    log_die("'", phase, "' is not a phase that runs MAgPIE. Those are: ",
+            paste(phases, collapse = ", "))
+  }
+  hit
+}
+
 # Accept a stage as 1|2|3 or as its token, return the integer.
 .as_stage <- function(stage) {
   tokens <- c("tau", "price", "demand")
@@ -183,7 +201,7 @@ stage_token <- function(stage) {
 # ---- run titles and folders -------------------------------------------------
 
 # cfg$title for a single run: the position in the sweep, and nothing else.
-# Everything the narrative varies is already in the folder it sits in.
+# Everything the experiment varies is already in the folder it sits in.
 #   stage 1  "tau"
 #   stage 2  "BE05"
 #   stage 3  "BE05_G0400"
@@ -219,26 +237,23 @@ locate_run_folder <- function(pcfg, stage, be = NULL, ghg = NULL) {
 }
 
 # Every run a stage is expected to produce, in loop order (bioenergy price
-# outer, GHG price inner), matching the order the drivers submit them.
+# outer, GHG price inner), matching the order the phases submit them.
 # Columns: be, ghg, title, folder. ghg is NA for stage 1.
+#
+# tidyr::expand_grid varies its last argument fastest, which is what puts the
+# GHG price on the inside of the demand sweep.
 expected_run_folders <- function(pcfg, stage) {
   stage <- .as_stage(stage)
   grid <- if (stage == 1L) {
-    data.frame(be = NA_real_, ghg = NA_real_)
+    tibble::tibble(be = NA_real_, ghg = NA_real_)
   } else if (stage == 2L) {
-    data.frame(be = pcfg$be_prices, ghg = 0)
+    tibble::tibble(be = pcfg$prices_bioenergy, ghg = 0)
   } else {
-    expand.grid(ghg = pcfg$ghg_prices, be = pcfg$be_prices)[, c("be", "ghg")]
+    tidyr::expand_grid(be = pcfg$prices_bioenergy, ghg = pcfg$prices_ghg)
   }
-  grid <- as.data.frame(grid, stringsAsFactors = FALSE)
-  rownames(grid) <- NULL
-  grid$title <- vapply(seq_len(nrow(grid)), function(i) {
-    run_title(pcfg, stage, be = grid$be[i], ghg = grid$ghg[i])
-  }, character(1))
-  grid$folder <- vapply(seq_len(nrow(grid)), function(i) {
-    run_folder(pcfg, stage, be = grid$be[i], ghg = grid$ghg[i])
-  }, character(1))
-  grid
+  dplyr::mutate(grid,
+                title  = purrr::map2_chr(be, ghg, function(b, g) run_title(pcfg, stage, be = b, ghg = g)),
+                folder = purrr::map2_chr(be, ghg, function(b, g) run_folder(pcfg, stage, be = b, ghg = g)))
 }
 
 # Run titles as an older set of runs on the cluster spells them: the SSP and the
@@ -250,7 +265,7 @@ expected_run_folders <- function(pcfg, stage) {
   bl <- as.numeric(pcfg$bii_target)
   if (abs(bl * 100 - round(bl * 100)) > 1e-9 || bl < 0 || bl >= 1) {
     log_die("the legacy layout writes the biodiversity target as two digits, so it takes a ",
-            "multiple of 0.01 below 1; this narrative has bii_target ", bl)
+            "multiple of 0.01 below 1; this experiment has bii_target ", bl)
   }
   paste0(pcfg$ssp, "_BD", pad_int(round(bl * 100), 2L), "_",
          be_token(be), "_", ghg_token(ghg), "demand")
@@ -269,13 +284,16 @@ expected_run_folders <- function(pcfg, stage) {
 # Columns: be, ghg, title, folder.
 matrix_grid <- function(pcfg, run_dir, layout = c("current", "legacy")) {
   layout <- match.arg(layout)
-  grid <- expand.grid(be = pcfg$be_prices, ghg = pcfg$ghg_prices, KEEP.OUT.ATTRS = FALSE)
-  grid$title <- vapply(seq_len(nrow(grid)), function(k) {
-    if (identical(layout, "legacy")) .legacy_run_title(pcfg, grid$be[k], grid$ghg[k])
-    else run_title(pcfg, 3L, be = grid$be[k], ghg = grid$ghg[k])
-  }, character(1))
-  grid$folder <- file.path(run_dir, grid$title)
-  grid
+  title_of <- function(be, ghg) {
+    if (identical(layout, "legacy")) .legacy_run_title(pcfg, be, ghg)
+    else run_title(pcfg, 3L, be = be, ghg = ghg)
+  }
+  # The bioenergy price varies fastest here, the other way round from the order
+  # the runs are submitted in, because this is the matrix's own row order.
+  tidyr::expand_grid(ghg = pcfg$prices_ghg, be = pcfg$prices_bioenergy) |>
+    dplyr::select(be, ghg) |>
+    dplyr::mutate(title  = purrr::map2_chr(be, ghg, title_of),
+                  folder = file.path(run_dir, title))
 }
 
 # ---- patch tarball naming ---------------------------------------------------
@@ -302,11 +320,11 @@ content_hash <- function(files) {
   substr(unname(tools::md5sum(tmp)), 1L, n)
 }
 
-# Name of a generated patch tarball: "<preset>_<stage>_<8 hex>.tgz".
+# Name of a generated patch tarball: "<experiment>_<stage>_<8 hex>.tgz".
 # The hash is over the files that go inside, so regenerating identical content
 # yields the same name (MAgPIE skips the re-download, correctly) and changed
 # content yields a new one (MAgPIE re-extracts and regenerates the module sets).
-patch_tarball_name <- function(preset, stage, files) {
+patch_tarball_name <- function(experiment, stage, files) {
   if (!length(files)) log_die("patch_tarball_name: no files to hash")
-  paste0(preset, "_", stage_token(stage), "_", content_hash(files), ".tgz")
+  paste0(experiment, "_", stage_token(stage), "_", content_hash(files), ".tgz")
 }

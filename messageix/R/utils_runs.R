@@ -8,30 +8,30 @@
 # |  infeasible run writes one too. The patch generators and the matrix builders
 # |  judge the same class of artefact, so they judge it by the same set.
 # |
-# |  The stage-1 fingerprint. A narrative's reference tau run is found by name,
+# |  The calibration record. An experiment's calibration run is found by name,
 # |  and a re-run is allowed to overwrite a folder of its own name. So a folder
-# |  can hold a tau solved under settings the narrative has since changed --
+# |  can hold a trajectory solved under settings the experiment has since changed --
 # |  the technological-change cost, the yield scenario, the model horizon, the
 # |  stage-1 protection scenario, the stage-1 bioenergy demand path or the input
 # |  tarballs -- and nothing in the folder's name would say so.
 # |
-# |  The fingerprint makes that checkable: stage 1 records the settings it ran
-# |  under, and patch_step2 refuses to take tau out of a run whose record
-# |  disagrees with the narrative it was asked for. A stale reference tau becomes
-# |  an error instead of a silent one.
+# |  The record makes that checkable: the calibrate phase writes down the
+# |  settings it ran under, and packing refuses to take the trajectory out of a
+# |  run whose record disagrees with the experiment it was asked for. A stale
+# |  trajectory becomes an error instead of a silent one.
 # |
 # |  Waiting. MAgPIE hands its runs to the cluster and returns at once, so a
 # |  stage driver that has "finished" has only finished submitting. The pipeline
 # |  driver therefore waits between stages, and a stage counts as finished when
-# |  every run folder the preset expects holds a solved fulldata.gdx -- the same
+# |  every run folder the experiment expects holds a solved fulldata.gdx -- the same
 # |  solvedness contract, applied to a whole set of runs instead of one.
 # |
 # |  One MAgPIE job does two things in sequence: it solves, writing fulldata.gdx,
 # |  and then it reports, writing report.mif out of that gdx. A run that has
-# |  solved is therefore not yet a run the matrix step can read, and reporting a
+# |  solved is therefore not yet a run the reduce phase can read, and reporting a
 # |  gigabyte of results takes minutes. Waits and completeness checks accordingly
-# |  take a list of extra files a finished run must also hold, and the matrix
-# |  step's stage asks for report.mif.
+# |  take a list of extra files a finished run must also hold, and the demand
+# |  sweep asks for report.mif.
 # |
 # |  Interface
 # |    SOLVED_MODELSTAT                        num; GAMS model statuses that count as solved
@@ -50,7 +50,7 @@
 # |    stage1_state(pcfg)                      -> chr(1); absent|unrecorded|matches|differs
 # |    assert_stage1_fingerprint(pcfg, folder) -> invisible(TRUE)
 # |
-# |  Dependencies: base R, messageix/R/utils_config.R, and -- at call time only,
+# |  Dependencies: base R, dplyr/purrr, messageix/R/utils_config.R, and -- at call time only,
 # |  so that the CLIs still parse without them -- magpie4 and gdx2.
 
 if (!exists("log_die", mode = "function"))        source("messageix/R/utils_log.R")
@@ -106,9 +106,9 @@ STAGE1_FINGERPRINT_FILE <- "messageix_stage1_fingerprint.txt"
   paste(format(x, trim = TRUE, scientific = FALSE), collapse = ",")
 }
 
-# Every stage-1-relevant preset-driven setting, as sorted "key=value" lines.
-# The gms$ rows are taken from stage_gms_keys(pcfg, 1) rather than listed, so a
-# switch added to a preset is covered without touching this function.
+# Every setting the calibration run depends on, as sorted "key=value" lines.
+# The gms$ entries are taken from stage_gms_keys(pcfg, 1) rather than listed, so
+# a switch an experiment adds is covered without touching this function.
 stage1_fingerprint <- function(pcfg) {
   gms_keys <- stage_gms_keys(pcfg, 1L)
   entries <- c(
@@ -132,19 +132,19 @@ write_stage1_fingerprint <- function(pcfg, folder) {
   invisible(path)
 }
 
-# What the reference run folder of this narrative currently holds:
+# What the calibration run folder of this experiment currently holds:
 #
-#   absent      no folder yet; the narrative solves its own
+#   absent      no folder yet; the experiment calibrates its own
 #   unrecorded  a run is there but does not say which settings it was solved
 #               under, so it cannot be checked -- it predates the record, or was
 #               copied in from elsewhere
-#   matches     a run solved under this narrative's settings; it is used as is
-#   differs     a run solved under another narrative's settings; this narrative
-#               cannot use it and has to solve its own
+#   matches     a run solved under this experiment's settings; it is used as is
+#   differs     a run solved under other settings; this experiment cannot use it
+#               and has to calibrate again
 #
-# The pipeline driver asks this before calling stage 1 finished, and the
-# ensemble driver asks it when planning a whole set of narratives. Both have to
-# reach the same verdict, so both ask here.
+# The plan asks this before calling the calibrate phase finished, and packing
+# asks it before reading the run. Both have to reach the same verdict, so both
+# ask here.
 stage1_state <- function(pcfg) {
   folder <- run_folder(pcfg, 1L)
   if (!dir.exists(folder)) return("absent")
@@ -156,23 +156,23 @@ stage1_state <- function(pcfg) {
 }
 
 # The value of one key in a fingerprint, or "<absent>" when the key is not in it
-# -- a preset that gained a gms$ row since the run was made.
+# -- an experiment that gained a gms switch since the run was made.
 .fingerprint_lookup <- function(lines, key) {
   hit <- lines[startsWith(lines, paste0(key, "="))]
   if (!length(hit)) "<absent>" else sub("^[^=]*=", "", hit[1L])
 }
 
-# Refuse to build a patch out of a reference tau solved under other settings. A
-# missing record is a warning, not a failure: a run made before the record
+# Refuse to pack a trajectory solved under other settings. A missing record is a
+# warning, not a failure: a run made before the record
 # existed, or one copied in from elsewhere, may well be the right one -- but
 # nobody can check it here, so the person running the pipeline has to.
 assert_stage1_fingerprint <- function(pcfg, folder) {
   path <- file.path(folder, STAGE1_FINGERPRINT_FILE)
   if (!file.exists(path)) {
     log_warn(folder, " carries no ", STAGE1_FINGERPRINT_FILE,
-             ", so the settings this reference tau was solved under cannot be checked against ",
-             "narrative '", pcfg$preset, "'. Re-run stage 1 to make the check ",
-             "possible, or confirm by hand that the stage-1 settings match.")
+             ", so the settings this trajectory was solved under cannot be checked against ",
+             "experiment '", pcfg$experiment, "'. Run the calibrate phase again to make the ",
+             "check possible, or confirm by hand that the settings match.")
     return(invisible(TRUE))
   }
   found <- readLines(path, warn = FALSE)
@@ -185,7 +185,8 @@ assert_stage1_fingerprint <- function(pcfg, folder) {
     ran <- .fingerprint_lookup(found, key)
     asked <- .fingerprint_lookup(wanted, key)
     if (identical(ran, asked)) NA_character_ else {
-      paste0("    ", key, ": the run used '", ran, "', preset '", pcfg$preset, "' asks for '", asked, "'")
+      paste0("    ", key, ": the run used '", ran, "', experiment '", pcfg$experiment,
+             "' asks for '", asked, "'")
     }
   }, character(1))
   differing <- differing[!is.na(differing)]
@@ -194,14 +195,14 @@ assert_stage1_fingerprint <- function(pcfg, folder) {
   # thousand characters, and with several settings differing the instruction at
   # the end is the first thing to be lost.
   log_report(c(
-    paste0(">> FATAL: the stage-1 run in ", folder, " was solved under different settings:"),
+    paste0(">> FATAL: the calibration run in ", folder, " was solved under different settings:"),
     differing,
-    paste0("  Its tau is therefore not the reference tau of narrative '", pcfg$preset,
-           "'. The folder is addressed by name, so a stage-1 run made before one of these ",
+    paste0("  Its trajectory is therefore not the one experiment '", pcfg$experiment,
+           "' asks for. The folder is addressed by name, so a run made before one of these ",
            "settings changed is still sitting in it."),
-    paste0("  Solve stage 1 again for this narrative first: Rscript ",
-           "messageix/start/driver_step1_tau.R --preset=", pcfg$preset)))
-  log_die("the stage-1 run in ", folder, " belongs to another narrative; the settings that ",
+    paste0("  Calibrate again for this experiment first: Rscript messageix/run.R ",
+           pcfg$experiment, " --phase=calibrate --force")))
+  log_die("the calibration run in ", folder, " was solved for other settings; the settings that ",
           "differ, and the command that fixes it, are printed in full above")
 }
 
@@ -212,7 +213,7 @@ assert_stage1_fingerprint <- function(pcfg, folder) {
 RUN_GDX_FILE <- "fulldata.gdx"
 
 # The results file a run writes once it has solved: every reported variable, in
-# the IAMC format the matrix step reads. It appears later than the solver
+# the IAMC format the reduce phase reads. It appears later than the solver
 # output, because the job reports only after the solve has finished.
 MIF_NAME <- "report.mif"
 
@@ -239,12 +240,11 @@ run_solved <- function(folder, extra = character(0)) {
   length(status) > 0L && all(status %in% SOLVED_MODELSTAT)
 }
 
-# The runs a stage is expected to produce, each marked solved or not.
+# The runs a phase is expected to produce, each marked solved or not.
 # Columns: be, ghg, title, folder, solved. `extra` is passed to run_solved().
 stage_progress <- function(pcfg, stage, extra = character(0)) {
-  runs <- expected_run_folders(pcfg, stage)
-  runs$solved <- vapply(runs$folder, run_solved, logical(1), extra = extra, USE.NAMES = FALSE)
-  runs
+  expected_run_folders(pcfg, stage) |>
+    dplyr::mutate(solved = purrr::map_lgl(folder, run_solved, extra = extra))
 }
 
 # Check a whole set of runs before any of them is read, and stop with one report
@@ -256,7 +256,7 @@ stage_progress <- function(pcfg, stage, extra = character(0)) {
 #   runs     data.frame with title and folder columns
 #   where    the directory the runs are expected under, named in the report
 #   extra    files each run folder must hold besides the solver output; the
-#            matrix step also needs each run's report.mif
+#            reduce phase also needs each run's report.mif
 #   strict   what to do about a run whose solve status cannot be read at all.
 #            TRUE stops -- the steps that build one artefact out of named runs
 #            cannot afford to include a run they cannot judge. FALSE warns and
@@ -341,7 +341,7 @@ queued_magpie_jobs <- function() {
   sum(trimws(out) == MAGPIE_JOB_NAME)
 }
 
-# Which runs of a stage are still unsolved, as a report to put in front of the
+# Which runs of a phase are still unsolved, as a report to put in front of the
 # reader when the wait ends badly. Long grids are truncated: 84 folder names
 # bury the sentence that says what went wrong.
 .unfinished_report <- function(folders, solved, stage, reason, show = 10L,
@@ -358,16 +358,16 @@ queued_magpie_jobs <- function() {
          "whether the run failed, was cancelled, or ran out of time.")
 }
 
-# Wait until every run of a stage has solved, narrating progress as it goes.
+# Wait until every run of a phase has solved, narrating progress as it goes.
 #
 #   poll_seconds   seconds between checks. Each check reads the model status out
-#                  of every gdx that has appeared, so checking a stage-3 grid is
+#                  of every gdx that has appeared, so checking the demand grid is
 #                  not free; runs take hours, and a five-minute cadence resolves
 #                  them finely enough.
 #   timeout_hours  hours to wait before giving up.
 #   extra          files a finished run must also hold. The wait ends when the
 #                  step after this one can actually read the runs, which for the
-#                  matrix step means each run's results file and not only its
+#                  reduce phase means each run's results file and not only its
 #                  solver output -- a job writes the two minutes apart.
 #
 # Three ways out. Every run solved: return. The queue reports no MAgPIE jobs on

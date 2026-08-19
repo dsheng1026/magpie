@@ -9,12 +9,11 @@ Upstream project
   and CITATION.cff are inherited unchanged.
 
 What this overlay adds
-  The MAgPIE -> MESSAGEix land-use emulator pipeline: parameterised start
-  scripts for the three run stages (reference tau, price-driven, demand-driven),
-  patch-tarball generators, matrix generation including woodfuel
-  post-processing, scenario presets, and pipeline documentation. Everything
-  lives under messageix/; the upstream model tree is unmodified except for
-  deltas documented in messageix/docs/.
+  The MAgPIE -> MESSAGEix land-use emulator pipeline: experiment declaration
+  and one command that runs the four phases (calibrate, price, demand, reduce),
+  the packing of inputs between them, matrix generation including woodfuel
+  post-processing, and pipeline documentation. Everything lives under
+  messageix/; no path outside that folder differs from upstream v4.11.0.
 
 Authorship
   Scientific authorship of the pipeline: Di Sheng (IIASA). The emulator code

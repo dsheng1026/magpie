@@ -1,5 +1,5 @@
-# |  The matrix step, first of two: build the emulator matrix from the stage-3
-# |  runs.
+# |  The reduce phase, first of two: build the emulator matrix from the demand
+# |  sweep's runs.
 # |
 # |  Each run writes its results as report.mif, in MAgPIE's own variable names.
 # |  This script renames, aggregates and unit-converts those variables into the
@@ -12,14 +12,14 @@
 # |  and no half-finished file is left on disk.
 # |
 # |  Usage, from the MAgPIE model root:
-# |    Rscript messageix/emulator/createMatrix_MM.R \
+# |    Rscript messageix/R/createMatrix_MM.R \
 # |      --run-dir output/MESSAGEix_5ff27be8 \
 # |      --out     /abs/path/to/magpie_input_SSP2_ref.csv
 # |
-# |    --run-dir DIR      directory holding the stage-3 run folders; required
+# |    --run-dir DIR      directory holding the demand sweep's run folders; required
 # |    --out FILE         matrix CSV to write, used exactly as given; required
-# |    --preset NAME      narrative column of the narratives file; default "default"
-# |    --csv PATH         narratives file; default default_preset_csv()
+# |    --experiment NAME  an experiment of messageix/experiments.R; default "default"
+# |    --set key=value    override one setting; repeatable
 # |    --allow-unmapped   report unmapped mapping variables instead of stopping
 # |    --layout=legacy    read run folders named the way an older set of runs on
 # |                       the cluster names them; for checking this pipeline's
@@ -29,16 +29,15 @@
 # |  Every option is accepted as "--key value" and as "--key=value".
 # |
 # |  The grid, the run names, the region names and the matrix scenario tags all
-# |  come from the narrative, so the same command builds any of them. Nothing is
+# |  come from the experiment, so the same command builds any of them. Nothing is
 # |  written unless every run in the grid exists, solved, and mapped completely:
 # |  a partial matrix is indistinguishable from a complete one downstream.
 # |
-# |  Dependencies: iamc, stringr, gdx2, magpie4 (solve status), and the
-# |  messageix/R/ layer, loaded through utils_runs.R.
+# |  Dependencies: iamc, readr/dplyr/tidyr/tibble/stringr, gdx2 and magpie4
+# |  (solve status), and the messageix/R/ layer, loaded through utils_runs.R.
 
 suppressPackageStartupMessages({
   library(iamc)      # write.reportProject()
-  library(stringr)   # str_match() on the mif's own Scenario field
 })
 
 # One line loads the whole messageix/R/ layer: each file there loads the files it
@@ -48,7 +47,7 @@ if (!exists("run_modelstat", mode = "function")) source("messageix/R/utils_runs.
 # The mapping travels with the scripts that use it, so it is addressed relative
 # to the model root rather than passed in: it is part of the pipeline, not a
 # per-run choice.
-MAP_FILE <- "messageix/emulator/MM_linkage_mapping.csv"
+MAP_FILE <- "messageix/data/MM_linkage_mapping.csv"
 
 # The results file each run writes is MIF_NAME, named once for the whole
 # pipeline in messageix/R/utils_runs.R: the pipeline driver waits for it, and
@@ -66,23 +65,24 @@ INTENSIVE_VARIABLES <- c("Price|Carbon|CO2",
 
 # ---- arguments --------------------------------------------------------------
 
-SYNOPSIS <- paste("usage: Rscript messageix/emulator/createMatrix_MM.R --run-dir=DIR --out=FILE",
-                  "[--preset=NAME] [--csv=PATH] [--allow-unmapped] [--help]")
+SYNOPSIS <- paste("usage: Rscript messageix/R/createMatrix_MM.R --run-dir=DIR --out=FILE",
+                  "[--experiment=NAME] [--set=key=value] [--allow-unmapped] [--layout=legacy]",
+                  "[--help]")
 
 USAGE <- c(
-  "Build the emulator matrix from a finished set of stage-3 runs: read each run's",
+  "Build the emulator matrix from a finished demand sweep: read each run's",
   "results file, rename and convert its variables into the ones MESSAGEix expects,",
   "tag each run with the prices it was run at, and write one CSV for the whole set.",
   "Woodfuel is not in it yet -- add_woodfuel_to_matrix.R adds that afterwards.",
   "",
-  "  Rscript messageix/emulator/createMatrix_MM.R --run-dir=DIR --out=FILE [flags]",
+  "  Rscript messageix/R/createMatrix_MM.R --run-dir=DIR --out=FILE [flags]",
   "                                                     (from the MAgPIE model root)",
   "",
   "Flags:",
-  "  --run-dir=DIR      the directory holding the stage-3 run folders; required",
+  "  --run-dir=DIR      the directory holding the demand sweep's run folders; required",
   "  --out=FILE         the matrix CSV to write, used exactly as given; required",
-  "  --preset=NAME      narrative column of the narratives file (default: default)",
-  paste0("  --csv=PATH         narratives file (default: ", default_preset_csv(), ")"),
+  "  --experiment=NAME  an experiment of messageix/experiments.R (default: default)",
+  "  --set=key=value    override one setting for this build; repeatable",
   "  --allow-unmapped   build even when the mapping asks for variables the runs did",
   "                     not report. They are listed either way; without this flag",
   "                     they stop the build.",
@@ -95,19 +95,17 @@ USAGE <- c(
   "",
   "Every option is accepted as --key=value and as --key value.",
   "Which runs are expected, how they are named and how the matrix is tagged all come",
-  "from the narrative, so the same command builds any of them. Nothing is written",
+  "from the experiment, so the same command builds any of them. Nothing is written",
   "unless every run of the set is there, solved, and completely mapped: a matrix",
   "built from part of the set cannot be told from a complete one further downstream.")
 
 # parse_flags() is the one command-line parser the pipeline uses
-# (messageix/R/utils_config.R). "--preset-csv" is an accepted but unadvertised
-# spelling of "--csv": every entry point calls the flag "--csv", and the alias
-# keeps an older command line working.
+# (messageix/R/utils_config.R).
 opt <- parse_flags(commandArgs(trailingOnly = TRUE),
-                   known   = c("run-dir", "out", "preset", "csv", "layout"),
-                   flags   = c("allow-unmapped", "help"),
-                   aliases = c("preset-csv" = "csv"),
-                   usage   = SYNOPSIS)
+                   known      = c("run-dir", "out", "experiment", "layout"),
+                   flags      = c("allow-unmapped", "help"),
+                   repeatable = "set",
+                   usage      = SYNOPSIS)
 
 if (isTRUE(opt$help)) {
   cat(USAGE, sep = "\n")
@@ -127,7 +125,7 @@ if (!layout %in% c("current", "legacy")) {
   log_die("--layout takes 'current' or 'legacy', got '", layout, "'")
 }
 
-pcfg <- config_from_flags(opt)
+pcfg <- config_from_flags(opt, cli_overrides(opt$set))
 
 if (!dir.exists(base_output_dir)) log_die("--run-dir does not exist: ", base_output_dir)
 if (!file.exists(MAP_FILE))       log_die("mapping file not found: ", MAP_FILE,
@@ -141,7 +139,7 @@ if (!file.exists(MAP_FILE))       log_die("mapping file not found: ", MAP_FILE,
 # factor. This check turns that into a stop instead of a silence.
 assert_price_factor <- function(mapping_path, pcfg, tolerance = 1e-6) {
   map <- read_pipeline_csv(mapping_path, "mapping file")
-  rows <- map[startsWith(map$Variable, "Price|"), , drop = FALSE]
+  rows <- dplyr::filter(map, startsWith(Variable, "Price|"))
   if (!nrow(rows)) {
     log_die("no target variable starting with 'Price|' in ", mapping_path,
             "; currency_2005_to_2017 has nothing to agree with")
@@ -151,7 +149,7 @@ assert_price_factor <- function(mapping_path, pcfg, tolerance = 1e-6) {
   bad <- which(is.na(found) | abs(found - wanted) > tolerance)
   if (length(bad)) {
     log_die("currency mismatch: currency_2005_to_2017 = ", pcfg$currency_2005_to_2017,
-            " in ", pcfg$csv, " implies a factor of ", signif(wanted, 9),
+            " implies a factor of ", signif(wanted, 9),
             " on the price rows of ", mapping_path, ", which carry ", rows$factor[bad],
             " for ", rows$Variable[bad],
             ". The deflator into MAgPIE and its reciprocal out of MAgPIE move together.")
@@ -161,14 +159,14 @@ assert_price_factor <- function(mapping_path, pcfg, tolerance = 1e-6) {
 
 assert_price_factor(MAP_FILE, pcfg)
 
-# One narrative writes its runs into one folder, named after it. A --run-dir
-# named something else is usually the wrong narrative, and the run-by-run check
+# One experiment writes its runs into one folder, named after it. A --run-dir
+# named something else is usually the wrong experiment, and the run-by-run check
 # below then stops with the full list of folders it looked for. A warning rather
 # than a stop, because a copied or relocated set of runs is legitimate -- and
 # the legacy layout has its own folder names, so the check does not apply.
 if (identical(layout, "current") && basename(base_output_dir) != pcfg$identifier) {
-  log_warn("--run-dir is named '", basename(base_output_dir), "' but narrative '",
-           pcfg$preset, "' writes its runs to '", pcfg$identifier, "'")
+  log_warn("--run-dir is named '", basename(base_output_dir), "' but experiment '",
+           pcfg$experiment, "' writes its runs to '", pcfg$identifier, "'")
 }
 
 # ---- mapping ----------------------------------------------------------------
@@ -200,8 +198,8 @@ unmapped_variables <- function(log_path) {
 # the matrix CSV, and it is the order the golden reference matrix uses.
 grid <- matrix_grid(pcfg, base_output_dir, layout = layout)
 
-log_banner("MATRIX", list(
-  preset     = pcfg$preset,
+log_banner("REDUCE - the emulator matrix", list(
+  experiment = pcfg$experiment,
   layout     = layout,
   runs       = nrow(grid),
   "run dir"  = base_output_dir,
@@ -219,8 +217,8 @@ log_step("CHECK", nrow(grid), " runs present and solved")
 
 id_cols <- c("Region", "Variable", "Unit", "SSPscen", "GHGscen", "BIOscen", "SDGscen")
 
-# The region vocabulary of the matrix, read once from the preset's region-name
-# table. The woodfuel step reads the same table, which is what lets the two
+# The region vocabulary of the matrix, read once from the experiment's
+# region-name table. The woodfuel step reads the same table, which is what lets the two
 # tables be joined afterwards.
 regions <- region_rename(pcfg)
 log_step("CONFIG", "region names from ", region_names_file(pcfg), " (",
@@ -240,26 +238,29 @@ for (k in seq_len(nrow(grid))) {
   misses <- unmapped_variables(tmp_log)
   if (length(misses)) unmapped[[grid$title[k]]] <- misses
 
-  df <- read.csv(tmp_map, sep = ";", check.names = FALSE, stringsAsFactors = FALSE)
+  df <- readr::read_delim(tmp_map, delim = ";", col_types = readr::cols(),
+                          name_repair = "minimal", guess_max = Inf, progress = FALSE)
   unlink(c(tmp_map, tmp_log))
 
-  # Drop the trailing empty column the mif export leaves behind.
-  df <- df[, !grepl("^X?$", names(df)) & names(df) != "", drop = FALSE]
+  # Drop the trailing empty column the mif export leaves behind. It has no name
+  # to select it by, so it goes by the one thing that identifies it.
+  df <- df[, nzchar(names(df)), drop = FALSE]
 
   # The results file carries its own Scenario field, which is the run title
   # MAgPIE wrote. Taking the prices back out of the data and checking them
   # against the folder catches a run folder holding some other run's results.
-  tag_be  <- as.integer(str_match(df$Scenario[1], "(?:^|_)BE(\\d+)")[, 2])
-  tag_ghg <- as.integer(str_match(df$Scenario[1], "(?:^|_)G(\\d+)")[, 2])
+  tag_be  <- as.integer(stringr::str_match(df$Scenario[1], "(?:^|_)BE(\\d+)")[, 2])
+  tag_ghg <- as.integer(stringr::str_match(df$Scenario[1], "(?:^|_)G(\\d+)")[, 2])
   if (is.na(tag_be) || is.na(tag_ghg) || tag_be != be || tag_ghg != ghg) {
     log_die("run folder ", grid$title[k], " holds a report for scenario '",
             df$Scenario[1], "'")
   }
 
-  df$SSPscen <- pcfg$ssp
-  df$GHGscen <- ghg_scen_tag(ghg)
-  df$BIOscen <- bio_scen_tag(be)
-  df$SDGscen <- pcfg$matrix_sdg_scen
+  df <- dplyr::mutate(df,
+                      SSPscen = pcfg$ssp,
+                      GHGscen = ghg_scen_tag(ghg),
+                      BIOscen = bio_scen_tag(be),
+                      SDGscen = pcfg$matrix_sdg_scen)
 
   # Every region the run reports has to be named in the table. Region sets
   # overlap heavily -- R10 and R12 share eleven of their twelve codes -- so a
@@ -272,15 +273,14 @@ for (k in seq_len(nrow(grid))) {
     log_die("run ", grid$title[k], " reports region(s) ", paste(unnamed, collapse = ", "),
             " that ", region_names_file(pcfg), " does not name. It names ",
             paste(names(regions), collapse = ", "),
-            ". Either these runs are at another region resolution than this preset, or the ",
-            "table is missing rows.")
+            ". Either these runs are at another region resolution than this experiment, or ",
+            "the table is missing rows.")
   }
-  df$Region <- unname(regions[df$Region])
-
   # Model and Scenario are not part of the target format; the four tag columns
   # carry the same information in the shape MESSAGEix reads.
-  df$Model <- NULL
-  df$Scenario <- NULL
+  df <- df |>
+    dplyr::mutate(Region = unname(regions[Region])) |>
+    dplyr::select(-dplyr::any_of(c("Model", "Scenario")))
 
   pieces[[length(pieces) + 1]] <- df
 }
@@ -309,17 +309,17 @@ if (length(unmapped)) {
   }
 }
 
-matrix_df <- do.call(rbind, pieces)
+matrix_df <- dplyr::bind_rows(pieces)
 
 # No two rows may share a scenario coordinate: a duplicate means two runs were
 # tagged identically and one of them is silently unreachable.
-dup_n <- sum(duplicated(matrix_df[id_cols]))
+dup_n <- sum(duplicated(dplyr::select(matrix_df, dplyr::all_of(id_cols))))
 if (dup_n > 0) log_die(dup_n, " rows share an id-column key")
 
 # Id columns first, then year columns in ascending numeric order.
 year_cols <- setdiff(names(matrix_df), id_cols)
 year_cols <- year_cols[order(as.numeric(year_cols))]
-matrix_df <- matrix_df[, c(id_cols, year_cols)]
+matrix_df <- dplyr::select(matrix_df, dplyr::all_of(c(id_cols, year_cols)))
 
 # ---- structural checks ------------------------------------------------------
 
@@ -327,31 +327,36 @@ matrix_df <- matrix_df[, c(id_cols, year_cols)]
 # value is taken from the run's own World row, it sits inside the range of the
 # regional values; where the regions have been summed instead, it equals their
 # total -- roughly thirteen times a typical region at R12. The test is made on
-# the narrative and year with the largest regional total, so a variable that is
+# the scenario and year with the largest regional total, so a variable that is
 # zero at a zero price is still tested somewhere it has signal.
 check_intensive_aggregation <- function(df, variables) {
   years <- setdiff(names(df), id_cols)
   year_col <- years[which.max(as.numeric(years))]
   for (v in variables) {
-    rows <- df[df$Variable == v, , drop = FALSE]
+    rows <- dplyr::filter(df, Variable == v)
     if (!nrow(rows)) next
-    key    <- paste(rows$BIOscen, rows$GHGscen)
-    value  <- suppressWarnings(as.numeric(rows[[year_col]]))
-    is_glo <- rows$Region == "World"
-    if (!any(is_glo) || !any(!is_glo)) next
-    reg_sum <- tapply(value[!is_glo], key[!is_glo], sum, na.rm = TRUE)
-    glo     <- tapply(value[is_glo],  key[is_glo],  sum, na.rm = TRUE)
-    scen    <- names(reg_sum)[which.max(abs(reg_sum))]
-    if (is.null(scen) || is.na(glo[scen]) || is.na(reg_sum[scen])) next
-    tolerance <- 1e-6 * max(abs(reg_sum[scen]), 1)
-    if (abs(glo[scen] - reg_sum[scen]) <= tolerance) {
-      log_warn(v, " at ", scen, ", ", year_col, ": World = ", signif(glo[scen], 6),
-               " equals the sum over regions = ", signif(reg_sum[scen], 6),
+    totals <- tibble::tibble(
+        scenario = paste(rows$BIOscen, rows$GHGscen),
+        where    = dplyr::if_else(rows$Region == "World", "world", "regions"),
+        value    = suppressWarnings(as.numeric(rows[[year_col]]))) |>
+      dplyr::group_by(scenario, where) |>
+      dplyr::summarise(total = sum(value, na.rm = TRUE), .groups = "drop") |>
+      tidyr::pivot_wider(names_from = where, values_from = total)
+    if (!all(c("world", "regions") %in% names(totals))) next
+    totals <- dplyr::filter(totals, !is.na(world), !is.na(regions))
+    if (!nrow(totals)) next
+    # The scenario with the largest regional total: a variable that is zero at a
+    # zero price is still tested somewhere it has signal.
+    worst <- dplyr::slice_max(totals, abs(regions), n = 1L, with_ties = FALSE)
+    tolerance <- 1e-6 * max(abs(worst$regions), 1)
+    if (abs(worst$world - worst$regions) <= tolerance) {
+      log_warn(v, " at ", worst$scenario, ", ", year_col, ": World = ", signif(worst$world, 6),
+               " equals the sum over regions = ", signif(worst$regions, 6),
                ". An intensive variable is being summed; set spatial = 'reg' for its ",
                "row in ", MAP_FILE, ".")
     } else {
-      log_step("CHECK", v, " at ", scen, ", ", year_col, ": World = ",
-               signif(glo[scen], 6), ", regional sum = ", signif(reg_sum[scen], 6),
+      log_step("CHECK", v, " at ", worst$scenario, ", ", year_col, ": World = ",
+               signif(worst$world, 6), ", regional sum = ", signif(worst$regions, 6),
                " -- not summed")
     }
   }

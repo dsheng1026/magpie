@@ -9,7 +9,7 @@
 # |  rest of them in messageix/R/pipeline_infrastructure.R: a built-in default,
 # |  an environment variable that overrides it per machine, and a
 # |  "--set key=value" that overrides it for one command. By the time a resolved
-# |  narrative exists the override has been applied, so the functions here read
+# |  experiment exists the override has been applied, so the functions here read
 # |  it and add only what MAgPIE's own interfaces need.
 # |
 # |    MAGPIE_MM_QOS          SLURM quality of service            e.g. standby
@@ -28,9 +28,9 @@
 # |    slurm_module_lines(pcfg)       -> chr; "module purge" plus one "module load" per module
 # |    mail_user(pcfg)                -> chr(1) or NULL
 # |
-# |  The R layer is the only place these settings are decided. The shell wrapper
-# |  messageix/emulator/run_matrix.sh asks this file for them rather than
-# |  carrying its own copies.
+# |  The R layer is the only place these settings are decided: the job scripts
+# |  the pipeline writes ask this file for the queue, the modules and the mail
+# |  address rather than carrying copies of them.
 # |
 # |  Dependencies: base R and messageix/R/utils_log.R.
 
@@ -81,8 +81,7 @@ run_qos <- function(pcfg) pcfg$qos
 # afterwards puts its own older libstdc++ ahead of it.
 slurm_modules <- function(pcfg) pcfg$slurm_modules
 
-# Shell lines that establish the R environment, for a job script or for the
-# matrix wrapper to evaluate. Emitted as commands rather than as a module list
+# Shell lines that establish the R environment, for a job script to evaluate. Emitted as commands rather than as a module list
 # so that the "purge first, gcc last" rule above is stated in exactly one place.
 slurm_module_lines <- function(pcfg) {
   modules <- slurm_modules(pcfg)

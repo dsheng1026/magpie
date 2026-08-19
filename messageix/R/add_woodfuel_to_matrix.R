@@ -1,8 +1,8 @@
-# |  The matrix step, second of two: add forest-harvest woodfuel to the emulator
+# |  The reduce phase, second of two: add forest-harvest woodfuel to the emulator
 # |  matrix.
 # |
 # |  Woodfuel -- wood harvested and burned for energy -- is not in the results
-# |  file the matrix is built from, so it is read instead from each stage-3 run's
+# |  file the matrix is built from, so it is read instead from each demand-sweep run's
 # |  solver output and added to the matrix's Primary Energy|Biomass rows, matched
 # |  on the scenario tags, the region and the year. The matrix createMatrix_MM.R
 # |  wrote is left as it is; the result goes to a new *_woodfuel file, and that
@@ -15,15 +15,15 @@
 # |  Based on woodfuel extraction code from Kristine Karstens.
 # |
 # |  Usage, from the MAgPIE model root:
-# |    Rscript messageix/emulator/add_woodfuel_to_matrix.R \
+# |    Rscript messageix/R/add_woodfuel_to_matrix.R \
 # |      --run-dir output/MESSAGEix_5ff27be8 \
 # |      --matrix  /abs/path/to/magpie_input_SSP2_ref.csv
 # |
-# |    --run-dir DIR      directory holding the stage-3 run folders; required
+# |    --run-dir DIR      directory holding the demand sweep's run folders; required
 # |    --matrix FILE      matrix CSV createMatrix_MM.R wrote, used as given; required
 # |    --out FILE         output CSV; default is --matrix with "_woodfuel" appended
-# |    --preset NAME      narrative column of the narratives file; default "default"
-# |    --csv PATH         narratives file; default default_preset_csv()
+# |    --experiment NAME  an experiment of messageix/experiments.R; default "default"
+# |    --set key=value    override one setting; repeatable
 # |    --layout=legacy    read run folders named the way an older set of runs on
 # |                       the cluster names them; for checking this pipeline's
 # |                       output against those runs, not for producing anything
@@ -43,8 +43,8 @@
 # |  stops the step, because region sets overlap and a partial match would leave
 # |  some regions quietly without woodfuel.
 # |
-# |  Dependencies: gdx2, magclass, magpie4 (solve status), and the messageix/R/
-# |  layer, loaded through utils_runs.R.
+# |  Dependencies: gdx2, magclass, magpie4 (solve status), readr/dplyr/tidyr/
+# |  tibble/stringr, and the messageix/R/ layer, loaded through utils_runs.R.
 
 suppressPackageStartupMessages({
   library(gdx2)      # readGDX()
@@ -57,8 +57,8 @@ if (!exists("run_modelstat", mode = "function")) source("messageix/R/utils_runs.
 
 # Energy content of woodfuel dry matter, GJ per tonne of dry matter. A
 # MAgPIE-team value, used deliberately in place of the energy content carried in
-# the solver output. It is not a preset setting because it is a property of the
-# fuel, not of a narrative.
+# the solver output. It is not a setting because it is a property of the fuel,
+# not of an experiment.
 WOODFUEL_GJ_PER_TDM <- 18
 
 # The matrix variable woodfuel is added to, and the unit its rows must carry.
@@ -75,47 +75,46 @@ WORLD_NAME <- "World"
 
 # ---- arguments --------------------------------------------------------------
 
-SYNOPSIS <- paste("usage: Rscript messageix/emulator/add_woodfuel_to_matrix.R --run-dir=DIR",
-                  "--matrix=FILE [--out=FILE] [--preset=NAME] [--csv=PATH] [--help]")
+SYNOPSIS <- paste("usage: Rscript messageix/R/add_woodfuel_to_matrix.R --run-dir=DIR",
+                  "--matrix=FILE [--out=FILE] [--experiment=NAME] [--set=key=value]",
+                  "[--layout=legacy] [--help]")
 
 USAGE <- c(
-  "Add the woodfuel each stage-3 run harvests to the emulator matrix. Woodfuel is",
+  "Add the woodfuel each demand-sweep run harvests to the emulator matrix. Woodfuel is",
   "missing from the results file the matrix is built from, so it is read from each",
   "run's solver output instead and added to the Primary Energy|Biomass rows, matched",
   "on scenario tag, region and year. The matrix given as --matrix is left as it is;",
   "the result is written to a new file, and that new file is the one MESSAGEix reads.",
   "",
-  "  Rscript messageix/emulator/add_woodfuel_to_matrix.R --run-dir=DIR --matrix=FILE [flags]",
+  "  Rscript messageix/R/add_woodfuel_to_matrix.R --run-dir=DIR --matrix=FILE [flags]",
   "                                                     (from the MAgPIE model root)",
   "",
   "Flags:",
-  "  --run-dir=DIR   the directory holding the stage-3 run folders; required",
-  "  --matrix=FILE   the matrix CSV createMatrix_MM.R wrote, used as given; required",
-  "  --out=FILE      where to write the result (default: --matrix with _woodfuel",
-  "                  before the extension). It may not be --matrix itself.",
-  "  --preset=NAME   narrative column of the narratives file (default: default)",
-  paste0("  --csv=PATH      narratives file (default: ", default_preset_csv(), ")"),
-  "  --layout=legacy read run folders named the way an older set of runs on the",
-  "                  cluster names them (SSP2_BD00_BE05_G0400demand). It is there to",
-  "                  check this pipeline's matrix against those runs without renaming",
-  "                  a folder of them; nothing produces runs in that layout.",
-  "  --help          this text",
+  "  --run-dir=DIR      the directory holding the demand sweep's run folders; required",
+  "  --matrix=FILE      the matrix CSV createMatrix_MM.R wrote, used as given; required",
+  "  --out=FILE         where to write the result (default: --matrix with _woodfuel before",
+  "                     the extension). It may not be --matrix itself.",
+  "  --experiment=NAME  an experiment of messageix/experiments.R (default: default)",
+  "  --set=key=value    override one setting for this build; repeatable",
+  "  --layout=legacy    read run folders named the way an older set of runs on the cluster",
+  "                     names them (SSP2_BD00_BE05_G0400demand). It is there to check this",
+  "                     pipeline's matrix against those runs without renaming a folder of",
+  "                     them; nothing produces runs in that layout.",
+  "  --help             this text",
   "",
   "Every option is accepted as --key=value and as --key value.",
   "Nothing is written unless every run of the set is there and solved, every region a",
-  "run reports is named in the narrative's region table, and every Primary Energy|Biomass",
+  "run reports is named in the experiment's region-name table, and every Primary Energy|Biomass",
   "row of the matrix receives woodfuel: added to some scenarios or regions and not",
   "others it is worse than none at all.")
 
 # parse_flags() is the one command-line parser the pipeline uses
-# (messageix/R/utils_config.R). "--preset-csv" is an accepted but unadvertised
-# spelling of "--csv": every entry point calls the flag "--csv", and the alias
-# keeps an older command line working.
+# (messageix/R/utils_config.R).
 opt <- parse_flags(commandArgs(trailingOnly = TRUE),
-                   known   = c("run-dir", "matrix", "out", "preset", "csv", "layout"),
-                   flags   = "help",
-                   aliases = c("preset-csv" = "csv"),
-                   usage   = SYNOPSIS)
+                   known      = c("run-dir", "matrix", "out", "experiment", "layout"),
+                   flags      = "help",
+                   repeatable = "set",
+                   usage      = SYNOPSIS)
 
 if (isTRUE(opt$help)) {
   cat(USAGE, sep = "\n")
@@ -135,7 +134,7 @@ if (!layout %in% c("current", "legacy")) {
 matrix_in       <- opt[["matrix"]]
 matrix_out      <- if (is.null(opt$out)) sub("\\.csv$", "_woodfuel.csv", matrix_in) else opt$out
 
-pcfg <- config_from_flags(opt)
+pcfg <- config_from_flags(opt, cli_overrides(opt$set))
 
 if (!dir.exists(base_output_dir)) log_die("--run-dir does not exist: ", base_output_dir)
 if (!file.exists(matrix_in))      log_die("--matrix does not exist: ", matrix_in)
@@ -145,8 +144,8 @@ if (identical(normalizePath(matrix_out, mustWork = FALSE),
 }
 
 if (identical(layout, "current") && basename(base_output_dir) != pcfg$identifier) {
-  log_warn("--run-dir is named '", basename(base_output_dir), "' but narrative '",
-           pcfg$preset, "' writes its runs to '", pcfg$identifier, "'")
+  log_warn("--run-dir is named '", basename(base_output_dir), "' but experiment '",
+           pcfg$experiment, "' writes its runs to '", pcfg$identifier, "'")
 }
 
 # ---- extraction -------------------------------------------------------------
@@ -159,11 +158,45 @@ woodfuel_ej_from_gdx <- function(gdx_path) {
   demand <- gdx2::readGDX(gdx_path, "pm_demand_forestry")[, , "woodfuel"]
   ej <- demand * 1e6 * WOODFUEL_GJ_PER_TDM / 1e9
   ej <- ej[, getYears(ej) <= LAST_YEAR, ]
-  d  <- as.data.frame(ej)
-  data.frame(Region      = as.character(d$Region),
-             year        = sub("^y", "", as.character(d$Year)),
-             woodfuel_EJ = as.numeric(d$Value),
-             stringsAsFactors = FALSE)
+  ej |>
+    as.data.frame() |>
+    tibble::as_tibble() |>
+    dplyr::transmute(Region      = as.character(Region),
+                     year        = stringr::str_remove(as.character(Year), "^y"),
+                     woodfuel_EJ = as.numeric(Value))
+}
+
+# Add the woodfuel table to the matrix's target rows, matched on the two
+# scenario tags, the region and the year. The matrix is pivoted long, joined and
+# pivoted back, which is what makes the match one join rather than a lookup key
+# pasted together per cell.
+#
+#   mat        the matrix: id columns, then one column per year
+#   wf         Region, year, woodfuel_EJ, BIOscen, GHGscen
+#   year_cols  the year columns of mat, in the order they appear in it
+#
+# Returns the matrix with woodfuel added, how many cells changed, and the rows
+# of mat that received any -- the caller stops on a target row that received
+# none, which is the failure this step exists to catch.
+add_woodfuel <- function(mat, wf, year_cols) {
+  long <- mat |>
+    dplyr::mutate(.row = dplyr::row_number()) |>
+    tidyr::pivot_longer(dplyr::all_of(year_cols), names_to = ".column", values_to = ".value") |>
+    dplyr::mutate(year = stringr::str_remove(.column, "^X")) |>
+    dplyr::left_join(wf, by = c("BIOscen", "GHGscen", "Region", "year"))
+
+  hit <- long$Variable == TARGET_VARIABLE & !is.na(long$woodfuel_EJ)
+  long$.value[hit] <- long$.value[hit] + long$woodfuel_EJ[hit]
+
+  # .row keeps the rows apart through the round trip, so two rows that agreed on
+  # every id column would not be silently merged into one.
+  wide <- long |>
+    dplyr::select(-year, -woodfuel_EJ) |>
+    tidyr::pivot_wider(names_from = ".column", values_from = ".value") |>
+    dplyr::arrange(.row) |>
+    dplyr::select(-.row)
+
+  list(matrix = wide, added = sum(hit), touched = sort(unique(long$.row[hit])))
 }
 
 # ---- run pre-flight ---------------------------------------------------------
@@ -177,8 +210,8 @@ grid <- matrix_grid(pcfg, base_output_dir, layout = layout)
 # woodfuel step that added nothing to anything.
 regions <- region_rename(pcfg)
 
-log_banner("WOODFUEL", list(
-  preset      = pcfg$preset,
+log_banner("REDUCE - woodfuel", list(
+  experiment  = pcfg$experiment,
   layout      = layout,
   runs        = nrow(grid),
   "run dir"   = base_output_dir,
@@ -212,7 +245,8 @@ for (k in seq_len(nrow(grid))) {
     log_die("run ", grid$title[k], " reports region(s) ", paste(unnamed, collapse = ", "),
             " that ", region_names_file(pcfg), " does not name. It names ",
             paste(names(regions), collapse = ", "),
-            ". Either this run is at another region resolution than this preset, or the table ",
+            ". Either this run is at another region resolution than this experiment, or the ",
+            "table ",
             "is missing rows; either way some regions would be left without woodfuel.")
   }
 
@@ -221,31 +255,38 @@ for (k in seq_len(nrow(grid))) {
   # one -- is left out of the sum and out of the result, because counting it
   # would double the global total and leave two rows competing for the same
   # matrix cell. The sum over the regions is the same quantity anyway.
-  regional <- wf[regions[wf$Region] != WORLD_NAME, , drop = FALSE]
-  world <- aggregate(woodfuel_EJ ~ year, data = regional, FUN = sum, na.rm = TRUE)
-  world$Region <- WORLD_NAME
-  wf <- wf[regions[wf$Region] != WORLD_NAME, , drop = FALSE]
-  wf$Region <- unname(regions[wf$Region])
-  wf <- rbind(wf, world[, c("Region", "year", "woodfuel_EJ")])
-  wf$BIOscen <- bio_scen_tag(be)
-  wf$GHGscen <- ghg_scen_tag(ghg)
-  wf_all[[k]] <- wf
+  regional <- wf |>
+    dplyr::filter(regions[Region] != WORLD_NAME) |>
+    dplyr::mutate(Region = unname(regions[Region]))
+  world <- regional |>
+    dplyr::group_by(year) |>
+    dplyr::summarise(woodfuel_EJ = sum(woodfuel_EJ, na.rm = TRUE), .groups = "drop") |>
+    dplyr::mutate(Region = WORLD_NAME)
+  wf_all[[k]] <- dplyr::bind_rows(regional, world) |>
+    dplyr::mutate(BIOscen = bio_scen_tag(be), GHGscen = ghg_scen_tag(ghg))
 }
-wf_all <- do.call(rbind, wf_all)
+wf_all <- dplyr::bind_rows(wf_all)
 log_step("WOODFUEL", nrow(wf_all), " values collected")
 
 # ---- add to the matrix ------------------------------------------------------
 
 log_step("MATRIX", "adding woodfuel to '", TARGET_VARIABLE, "'")
-mat <- read.csv(matrix_in, header = TRUE, check.names = FALSE, stringsAsFactors = FALSE)
+mat <- readr::read_csv(matrix_in, col_types = readr::cols(), name_repair = "minimal",
+                       guess_max = Inf, progress = FALSE)
 
-# Year column headers survive read.csv as "1995" or "X1995" depending on
-# check.names; both forms map back to the bare year the woodfuel table uses.
-year_cols <- grep("^X?[0-9]{4}$", names(mat), value = TRUE)
-year_of   <- setNames(sub("^X", "", year_cols), year_cols)
+# Year column headers are written bare ("1995"); a file that has been through a
+# reader which repairs names carries them as "X1995", and both forms map back to
+# the bare year the woodfuel table uses.
+year_cols <- stringr::str_subset(names(mat), "^X?[0-9]{4}$")
 
-wf_all$key <- with(wf_all, paste(BIOscen, GHGscen, Region, year, sep = "|"))
-wf_lookup  <- setNames(wf_all$woodfuel_EJ, wf_all$key)
+# Woodfuel is added to these columns, so they have to be numbers. A column that
+# arrived as text carries something that is not a number, and adding to it would
+# either fail here or quietly write NA into the matrix.
+not_numeric <- year_cols[!vapply(mat[year_cols], is.numeric, logical(1))]
+if (length(not_numeric)) {
+  log_die("year column(s) ", paste(not_numeric, collapse = ", "), " of ", matrix_in,
+          " are not numeric; woodfuel cannot be added to them")
+}
 
 is_pe <- mat$Variable == TARGET_VARIABLE
 if (!any(is_pe)) log_die("target variable not found in ", matrix_in, ": ", TARGET_VARIABLE)
@@ -259,20 +300,10 @@ if (!all(units_seen == TARGET_UNIT)) {
           " in ", matrix_in, "; woodfuel is added in ", TARGET_UNIT)
 }
 
-added <- 0L
-touched <- rep(FALSE, nrow(mat))
-for (r in which(is_pe)) {
-  for (yc in year_cols) {
-    key <- paste(mat$BIOscen[r], mat$GHGscen[r], mat$Region[r], year_of[[yc]], sep = "|")
-    add <- wf_lookup[key]
-    if (!is.na(add)) {
-      mat[r, yc] <- as.numeric(mat[r, yc]) + as.numeric(add)
-      added <- added + 1L
-      touched[r] <- TRUE
-    }
-  }
-}
-log_step("MATRIX", added, " cells updated across ", sum(is_pe), " ", TARGET_VARIABLE, " rows")
+augmented <- add_woodfuel(mat, wf_all, year_cols)
+mat <- augmented$matrix
+log_step("MATRIX", augmented$added, " cells updated across ", sum(is_pe), " ",
+         TARGET_VARIABLE, " rows")
 
 # Every Primary Energy|Biomass row must have received woodfuel in at least one
 # year. A row left untouched means its scenario tag, region or years find no
@@ -280,7 +311,7 @@ log_step("MATRIX", added, " cells updated across ", sum(is_pe), " ", TARGET_VARI
 # scenarios and regions and not others -- which nothing downstream can tell
 # apart from a complete file. The rows are listed so the disagreeing key is
 # visible rather than guessed at.
-missed <- which(is_pe & !touched)
+missed <- setdiff(which(is_pe), augmented$touched)
 if (length(missed)) {
   shown <- utils::head(missed, 20L)
   log_report(c(

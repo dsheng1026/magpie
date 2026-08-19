@@ -4,7 +4,7 @@
 # |  ">> VERB: message" so a cluster log can be filtered with a single grep,
 # |  e.g. `grep '^>> SUBMIT:' slurm-*.out`. Verbs are upper-case bare words;
 # |  the vocabulary in use is CONFIG, EXTRACT, PACK, SUBMIT, RUN, CHECK,
-# |  MATRIX, WOODFUEL, WRITE, SKIP, WAIT, STEP, EXEC, NARRATIVE, DONE.
+# |  MATRIX, WOODFUEL, WRITE, SKIP, WAIT, PHASE, EXEC, EXPERIMENT, DONE.
 # |
 # |  Drivers and the runner narrate. Operation functions never print — they
 # |  return values or stop with a message.
@@ -66,8 +66,8 @@ log_report <- function(lines) {
   invisible(NULL)
 }
 
-# Boxed key/value summary, printed once per driver invocation so a log file
-# carries the full experiment design at its head.
+# Boxed key/value summary, printed once per command so a log file carries the
+# full design of what was run at its head.
 # `entries` is a named list or named character vector; NULL prints title only.
 log_banner <- function(title, entries = NULL) {
   rule <- strrep("=", 78L)
