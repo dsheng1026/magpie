@@ -3,36 +3,51 @@
 # |  Two contracts that four scripts have to agree on, so both are defined here
 # |  once and nowhere else.
 # |
-# |  SOLVEDNESS. A run counts as solved when every time step reports a GAMS model
+# |  Solvedness. A run counts as solved when every time step reports a GAMS model
 # |  status in SOLVED_MODELSTAT. Existence of fulldata.gdx says nothing: an
 # |  infeasible run writes one too. The patch generators and the matrix builders
 # |  judge the same class of artefact, so they judge it by the same set.
 # |
-# |  THE STAGE-1 FINGERPRINT. The stage-1 run title is "<ssp>_tau" and its folder
-# |  sits one level above the narrative folders, because the reference tau is
-# |  reusable across narratives. It is reusable exactly when the narratives agree
-# |  on every stage-1-relevant setting, and several of those are preset-driven:
-# |  c13_tccost, c14_yields_scenario and c_timesteps reach stage 1 through the
-# |  preset's gms$ rows, and the step-1 protection scenario, the step-1 bioenergy
-# |  demand path and the input tarball names through its pipeline$ rows. Two
-# |  presets differing in any of them write to the same folder, and
-# |  cfg$force_replace is TRUE by default, so the second overwrites the first
-# |  in silence.
+# |  The stage-1 fingerprint. A narrative's reference tau run is found by name,
+# |  and a re-run is allowed to overwrite a folder of its own name. So a folder
+# |  can hold a tau solved under settings the narrative has since changed --
+# |  the technological-change cost, the yield scenario, the model horizon, the
+# |  stage-1 protection scenario, the stage-1 bioenergy demand path or the input
+# |  tarballs -- and nothing in the folder's name would say so.
 # |
-# |  The fingerprint is that reuse condition written down and made checkable:
-# |  stage 1 records the settings it ran under, and the step-1.5 generator
-# |  refuses to extract tau from a run whose record disagrees with the preset it
-# |  was invoked with. The run folder names stay as they are -- they are part of
-# |  the golden-master artefact -- and the collision becomes an error instead of
-# |  a silent swap.
+# |  The fingerprint makes that checkable: stage 1 records the settings it ran
+# |  under, and patch_step2 refuses to take tau out of a run whose record
+# |  disagrees with the narrative it was asked for. A stale reference tau becomes
+# |  an error instead of a silent one.
+# |
+# |  Waiting. MAgPIE hands its runs to the cluster and returns at once, so a
+# |  stage driver that has "finished" has only finished submitting. The pipeline
+# |  driver therefore waits between stages, and a stage counts as finished when
+# |  every run folder the preset expects holds a solved fulldata.gdx -- the same
+# |  solvedness contract, applied to a whole set of runs instead of one.
+# |
+# |  One MAgPIE job does two things in sequence: it solves, writing fulldata.gdx,
+# |  and then it reports, writing report.mif out of that gdx. A run that has
+# |  solved is therefore not yet a run the matrix step can read, and reporting a
+# |  gigabyte of results takes minutes. Waits and completeness checks accordingly
+# |  take a list of extra files a finished run must also hold, and the matrix
+# |  step's stage asks for report.mif.
 # |
 # |  Interface
 # |    SOLVED_MODELSTAT                        num; GAMS model statuses that count as solved
 # |    run_modelstat(gdx)                      -> num; per-timestep statuses, numeric(0) if unreadable
 # |    assert_run_solved(gdx, label)           -> invisible(TRUE); stops on anything else
+# |    RUN_GDX_FILE                            chr(1); the solver output in a run folder
+# |    MIF_NAME                                chr(1); the results file the reporting writes
+# |    run_solved(folder, extra)               -> lgl(1); one finished, solved, reported run
+# |    stage_progress(pcfg, stage, extra)      -> data.frame; expected runs plus a solved column
+# |    assert_runs_solved(runs, where, ...)    -> invisible(TRUE); a whole run set, reported at once
+# |    queued_magpie_jobs()                    -> int(1) or NA; MAgPIE jobs in the SLURM queue
+# |    wait_for_stage(pcfg, stage, poll_seconds, timeout_hours, extra) -> invisible(TRUE)
 # |    STAGE1_FINGERPRINT_FILE                 chr(1); its file name inside the run folder
 # |    stage1_fingerprint(pcfg)                -> chr; sorted "key=value" lines
 # |    write_stage1_fingerprint(pcfg, folder)  -> invisible(chr(1)); the path written
+# |    stage1_state(pcfg)                      -> chr(1); absent|unrecorded|matches|differs
 # |    assert_stage1_fingerprint(pcfg, folder) -> invisible(TRUE)
 # |
 # |  Dependencies: base R, messageix/R/utils_config.R, and -- at call time only,
@@ -43,12 +58,11 @@ if (!exists("stage_gms_keys", mode = "function")) source("messageix/R/utils_conf
 
 # ---- solvedness -------------------------------------------------------------
 
-# 1 optimal, 2 locally optimal, 7 feasible without a proof of optimality.
-# MAgPIE's own calibration check accepts these three
-# (scripts/calibration/calc_calib.R:85); scripts/output/extra/highres.R:48 is
-# stricter and drops 1. The looser set is the right one here because a run that
-# reached a proven optimum is not a failure, and the pipeline must not accept a
-# run for the matrix that it would refuse for the patch.
+# GAMS records how each time step's solve ended. 1 means a proven optimum, 2 a
+# local optimum, 7 a feasible answer with no proof of optimality. All three are
+# results a person would use, so all three count as solved here. One set for the
+# whole pipeline: a run good enough to go into the emulator matrix must not be
+# refused when a patch tarball is built from it, or the other way round.
 SOLVED_MODELSTAT <- c(1, 2, 7)
 
 # Solve status of one run, as the vector of per-timestep GAMS model statuses.
@@ -101,14 +115,14 @@ stage1_fingerprint <- function(pcfg) {
     stats::setNames(
       vapply(gms_keys, function(key) .fingerprint_value(pcfg$gms[[key]]), character(1)),
       paste0("gms$", gms_keys)),
-    c(`pipeline$ssp`                    = .fingerprint_value(pcfg$ssp),
-      `pipeline$protect_scenario_step1` = .fingerprint_value(pcfg$protect_scenario_step1),
-      `pipeline$biodem_scenario_step1`  = .fingerprint_value(pcfg$biodem_scenario_step1),
-      `pipeline$input_regional`         = .fingerprint_value(pcfg$input_regional),
-      `pipeline$input_cellular`         = .fingerprint_value(pcfg$input_cellular),
-      `pipeline$input_validation`       = .fingerprint_value(pcfg$input_validation),
-      `pipeline$input_additional`       = .fingerprint_value(pcfg$input_additional),
-      `pipeline$input_calibration`      = .fingerprint_value(pcfg$input_calibration)))
+    c(`ssp`                    = .fingerprint_value(pcfg$ssp),
+      `protect_scenario_step1` = .fingerprint_value(pcfg$protect_scenario_step1),
+      `biodem_scenario_step1`  = .fingerprint_value(pcfg$biodem_scenario_step1),
+      `input_regional`         = .fingerprint_value(pcfg$input_regional),
+      `input_cellular`         = .fingerprint_value(pcfg$input_cellular),
+      `input_validation`       = .fingerprint_value(pcfg$input_validation),
+      `input_additional`       = .fingerprint_value(pcfg$input_additional),
+      `input_calibration`      = .fingerprint_value(pcfg$input_calibration)))
   sort(paste0(names(entries), "=", unname(entries)))
 }
 
@@ -118,6 +132,29 @@ write_stage1_fingerprint <- function(pcfg, folder) {
   invisible(path)
 }
 
+# What the reference run folder of this narrative currently holds:
+#
+#   absent      no folder yet; the narrative solves its own
+#   unrecorded  a run is there but does not say which settings it was solved
+#               under, so it cannot be checked -- it predates the record, or was
+#               copied in from elsewhere
+#   matches     a run solved under this narrative's settings; it is used as is
+#   differs     a run solved under another narrative's settings; this narrative
+#               cannot use it and has to solve its own
+#
+# The pipeline driver asks this before calling stage 1 finished, and the
+# ensemble driver asks it when planning a whole set of narratives. Both have to
+# reach the same verdict, so both ask here.
+stage1_state <- function(pcfg) {
+  folder <- run_folder(pcfg, 1L)
+  if (!dir.exists(folder)) return("absent")
+  record <- file.path(folder, STAGE1_FINGERPRINT_FILE)
+  if (!file.exists(record)) return("unrecorded")
+  found <- readLines(record, warn = FALSE)
+  found <- found[nzchar(trimws(found))]
+  if (identical(found, stage1_fingerprint(pcfg))) "matches" else "differs"
+}
+
 # The value of one key in a fingerprint, or "<absent>" when the key is not in it
 # -- a preset that gained a gms$ row since the run was made.
 .fingerprint_lookup <- function(lines, key) {
@@ -125,16 +162,16 @@ write_stage1_fingerprint <- function(pcfg, folder) {
   if (!length(hit)) "<absent>" else sub("^[^=]*=", "", hit[1L])
 }
 
-# Refuse to reuse a stage-1 run that another preset produced. Absence of the
-# file is a warning, not a failure: a run made before the fingerprint existed,
-# or one copied in from elsewhere, is still usable -- the reader just has to
-# confirm the settings themselves.
+# Refuse to build a patch out of a reference tau solved under other settings. A
+# missing record is a warning, not a failure: a run made before the record
+# existed, or one copied in from elsewhere, may well be the right one -- but
+# nobody can check it here, so the person running the pipeline has to.
 assert_stage1_fingerprint <- function(pcfg, folder) {
   path <- file.path(folder, STAGE1_FINGERPRINT_FILE)
   if (!file.exists(path)) {
     log_warn(folder, " carries no ", STAGE1_FINGERPRINT_FILE,
              ", so the settings this reference tau was solved under cannot be checked against ",
-             "preset '", pcfg$preset, "'. Re-run stage 1 for this preset to make the check ",
+             "narrative '", pcfg$preset, "'. Re-run stage 1 to make the check ",
              "possible, or confirm by hand that the stage-1 settings match.")
     return(invisible(TRUE))
   }
@@ -153,10 +190,228 @@ assert_stage1_fingerprint <- function(pcfg, folder) {
   }, character(1))
   differing <- differing[!is.na(differing)]
 
-  log_die("the stage-1 run in ", folder, " was solved under different settings:\n",
-          paste(differing, collapse = "\n"),
-          "\n  Its tau is therefore not this preset's reference tau. The stage-1 run folder is ",
-          "shared across narratives (title '", run_title(pcfg, 1L),
-          "'), so a later stage-1 run of another preset overwrote it. Re-run stage 1 for this ",
-          "preset first: Rscript messageix/start/driver_step1_tau.R --preset=", pcfg$preset)
+  # Reported rather than raised: R cuts a stop() message off after about a
+  # thousand characters, and with several settings differing the instruction at
+  # the end is the first thing to be lost.
+  log_report(c(
+    paste0(">> FATAL: the stage-1 run in ", folder, " was solved under different settings:"),
+    differing,
+    paste0("  Its tau is therefore not the reference tau of narrative '", pcfg$preset,
+           "'. The folder is addressed by name, so a stage-1 run made before one of these ",
+           "settings changed is still sitting in it."),
+    paste0("  Solve stage 1 again for this narrative first: Rscript ",
+           "messageix/start/driver_step1_tau.R --preset=", pcfg$preset)))
+  log_die("the stage-1 run in ", folder, " belongs to another narrative; the settings that ",
+          "differ, and the command that fixes it, are printed in full above")
+}
+
+# ---- waiting for a stage to finish ------------------------------------------
+
+# The file MAgPIE writes into a run folder when the run has been through the
+# solver. It is the artefact every solvedness check reads.
+RUN_GDX_FILE <- "fulldata.gdx"
+
+# The results file a run writes once it has solved: every reported variable, in
+# the IAMC format the matrix step reads. It appears later than the solver
+# output, because the job reports only after the solve has finished.
+MIF_NAME <- "report.mif"
+
+# The SLURM job name every MAgPIE run is submitted under, whichever queue it
+# goes to. It says that a job is a MAgPIE run; it does not say which run, so a
+# count of these jobs answers "is anything still going" and nothing finer.
+MAGPIE_JOB_NAME <- "mag-run"
+
+# TRUE when one run folder holds a finished run that solved. A missing gdx means
+# the run has not finished yet, which is not an error: a stage is waited on
+# exactly while some of its folders are still empty. Reading the model status
+# needs magpie4 or gdx2, and the file-existence test comes first so that a
+# machine without those packages can still ask about a grid that has not run.
+#
+#   extra  files the run folder must hold besides the solver output. Pass
+#          MIF_NAME where the step after this one reads the results file: the
+#          job writes it after the solve, so a run can be solved and not yet
+#          readable.
+run_solved <- function(folder, extra = character(0)) {
+  gdx <- file.path(folder, RUN_GDX_FILE)
+  if (!file.exists(gdx)) return(FALSE)
+  if (length(extra) && !all(file.exists(file.path(folder, extra)))) return(FALSE)
+  status <- run_modelstat(gdx)
+  length(status) > 0L && all(status %in% SOLVED_MODELSTAT)
+}
+
+# The runs a stage is expected to produce, each marked solved or not.
+# Columns: be, ghg, title, folder, solved. `extra` is passed to run_solved().
+stage_progress <- function(pcfg, stage, extra = character(0)) {
+  runs <- expected_run_folders(pcfg, stage)
+  runs$solved <- vapply(runs$folder, run_solved, logical(1), extra = extra, USE.NAMES = FALSE)
+  runs
+}
+
+# Check a whole set of runs before any of them is read, and stop with one report
+# naming every unusable run. Being told about them one at a time turns a single
+# resubmission into a series of them, and half a set is worse than none: a patch
+# built from six of seven runs, or a matrix built from 80 of 84, is
+# indistinguishable downstream from a complete one.
+#
+#   runs     data.frame with title and folder columns
+#   where    the directory the runs are expected under, named in the report
+#   extra    files each run folder must hold besides the solver output; the
+#            matrix step also needs each run's report.mif
+#   strict   what to do about a run whose solve status cannot be read at all.
+#            TRUE stops -- the steps that build one artefact out of named runs
+#            cannot afford to include a run they cannot judge. FALSE warns and
+#            carries on, checking those runs for existence only.
+#   closing  the sentence that ends the report, saying what was not written
+assert_runs_solved <- function(runs, where, extra = character(0),
+                               strict = FALSE, closing = "Nothing was written.") {
+  no_folder <- character(0)
+  no_extra  <- list()
+  no_gdx    <- character(0)
+  unsolved  <- character(0)   # titles
+  bad_state <- character(0)   # the same titles with the model status shown
+  unreadable <- character(0)
+
+  for (i in seq_len(nrow(runs))) {
+    folder <- runs$folder[i]
+    title  <- runs$title[i]
+    if (!dir.exists(folder)) {
+      no_folder <- c(no_folder, title)
+      next
+    }
+    for (file in extra) {
+      if (!file.exists(file.path(folder, file))) no_extra[[file]] <- c(no_extra[[file]], title)
+    }
+    gdx <- file.path(folder, RUN_GDX_FILE)
+    if (!file.exists(gdx)) {
+      no_gdx <- c(no_gdx, title)
+      next
+    }
+    status <- run_modelstat(gdx)
+    if (!length(status)) {
+      unreadable <- c(unreadable, title)
+    } else if (!all(status %in% SOLVED_MODELSTAT)) {
+      unsolved <- c(unsolved, title)
+      bad_state <- c(bad_state, paste0(title, " (modelstat ",
+                                       paste(sort(unique(setdiff(status, SOLVED_MODELSTAT))),
+                                             collapse = "/"), ")"))
+    }
+  }
+
+  broken <- c(no_folder, unlist(no_extra, use.names = FALSE), no_gdx, unsolved,
+              if (strict) unreadable)
+  if (length(broken)) {
+    block <- function(label, titles) {
+      if (!length(titles)) return(NULL)
+      paste0("  ", label, " (", length(titles), "):\n    ", paste(titles, collapse = "\n    "))
+    }
+    log_report(c(
+      paste0(nrow(runs), " run(s) expected under ", where, "; the set is incomplete."),
+      block("no run folder", no_folder),
+      unlist(lapply(names(no_extra), function(f) block(paste0("no ", f), no_extra[[f]])),
+             use.names = FALSE),
+      block(paste0("no ", RUN_GDX_FILE), no_gdx),
+      block("did not solve", bad_state),
+      if (strict) block(paste0("no model status in ", RUN_GDX_FILE), unreadable),
+      closing))
+    log_die(length(unique(broken)), " of ", nrow(runs),
+            " run(s) are unusable; every one of them is listed above")
+  }
+
+  if (length(unreadable)) {
+    log_warn("the solve status of ", length(unreadable), " run(s) cannot be read: ", RUN_GDX_FILE,
+             " is there but carries no model status, so those runs are checked for existence ",
+             "only:\n    ", paste(unreadable, collapse = "\n    "))
+  }
+  invisible(TRUE)
+}
+
+# How many MAgPIE runs this user has sitting in the SLURM queue, or NA where
+# there is no queue to ask -- a laptop, or a cluster login without squeue. NA
+# means "cannot tell", and a caller must read it as "possibly still running"
+# rather than as zero.
+queued_magpie_jobs <- function() {
+  if (!nzchar(Sys.which("squeue"))) return(NA_integer_)
+  user <- Sys.getenv("USER", unset = Sys.info()[["user"]])
+  if (!nzchar(user)) return(NA_integer_)
+  out <- suppressWarnings(try(
+    system2("squeue", c("-h", "-u", shQuote(user), "-o", shQuote("%j")),
+            stdout = TRUE, stderr = FALSE),
+    silent = TRUE))
+  if (inherits(out, "try-error") || !is.null(attr(out, "status"))) return(NA_integer_)
+  sum(trimws(out) == MAGPIE_JOB_NAME)
+}
+
+# Which runs of a stage are still unsolved, as a report to put in front of the
+# reader when the wait ends badly. Long grids are truncated: 84 folder names
+# bury the sentence that says what went wrong.
+.unfinished_report <- function(folders, solved, stage, reason, show = 10L,
+                               extra = character(0)) {
+  bad <- folders[!solved]
+  shown <- utils::head(bad, show)
+  paste0("stage ", stage, ": ", reason, ". ", length(bad), " of ", length(folders),
+         " run(s) hold no solved ", RUN_GDX_FILE,
+         if (length(extra)) paste0(" with ", paste(extra, collapse = " and ")) else "",
+         ":\n  ",
+         paste(shown, collapse = "\n  "),
+         if (length(bad) > show) paste0("\n  ... and ", length(bad) - show, " more"),
+         "\n  Each run folder holds the log of its own job; read one of those to find out ",
+         "whether the run failed, was cancelled, or ran out of time.")
+}
+
+# Wait until every run of a stage has solved, narrating progress as it goes.
+#
+#   poll_seconds   seconds between checks. Each check reads the model status out
+#                  of every gdx that has appeared, so checking a stage-3 grid is
+#                  not free; runs take hours, and a five-minute cadence resolves
+#                  them finely enough.
+#   timeout_hours  hours to wait before giving up.
+#   extra          files a finished run must also hold. The wait ends when the
+#                  step after this one can actually read the runs, which for the
+#                  matrix step means each run's results file and not only its
+#                  solver output -- a job writes the two minutes apart.
+#
+# Three ways out. Every run solved: return. The queue reports no MAgPIE jobs on
+# two checks in a row while folders are still missing: the runs died, and
+# waiting 48 hours to be told that helps nobody. The timeout expires: stop with
+# the same report. Two consecutive empty checks rather than one, because a job
+# that has just been handed to sbatch takes a moment to appear in the queue.
+wait_for_stage <- function(pcfg, stage, poll_seconds = 300, timeout_hours = 48,
+                           extra = character(0)) {
+  stage <- .as_stage(stage)
+  runs <- expected_run_folders(pcfg, stage)
+  total <- nrow(runs)
+  # Solvedness never goes back to FALSE, so a run once seen solved is not read
+  # again -- otherwise every check would re-read the whole grid.
+  solved <- rep(FALSE, total)
+  deadline <- Sys.time() + timeout_hours * 3600
+  empty_queue <- 0L
+
+  repeat {
+    solved[!solved] <- vapply(runs$folder[!solved], run_solved, logical(1),
+                              extra = extra, USE.NAMES = FALSE)
+    if (all(solved)) {
+      log_step("DONE", "stage ", stage, ": all ", total, " run(s) solved",
+               if (length(extra)) paste0(" and reported (", paste(extra, collapse = ", "), ")") else "")
+      return(invisible(TRUE))
+    }
+
+    queued <- queued_magpie_jobs()
+    empty_queue <- if (!is.na(queued) && queued == 0L) empty_queue + 1L else 0L
+    if (empty_queue >= 2L) {
+      log_die(.unfinished_report(runs$folder, solved, stage,
+                                 "no MAgPIE jobs are left in the queue but runs are still missing",
+                                 extra = extra))
+    }
+    if (Sys.time() > deadline) {
+      log_die(.unfinished_report(runs$folder, solved, stage,
+                                 paste0("still unfinished after the ", timeout_hours,
+                                        " hour limit"),
+                                 extra = extra))
+    }
+
+    log_step("WAIT", "stage ", stage, ": ", sum(solved), " of ", total, " run(s) solved",
+             if (is.na(queued)) "" else paste0(", ", queued, " MAgPIE job(s) in the queue"),
+             "; next check in ", poll_seconds, " s")
+    Sys.sleep(poll_seconds)
+  }
 }

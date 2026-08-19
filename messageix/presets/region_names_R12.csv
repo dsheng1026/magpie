@@ -1,0 +1,34 @@
+# MAgPIE region code -> MESSAGEix region name, for the MESSAGE R12 region set.
+#
+# THE RECIPE. Two columns, semicolon-separated: the code MAgPIE reports a region
+# under, then the name MESSAGEix knows it by. One row per region, plus the two
+# global rows below; a code that is not listed here passes through unchanged.
+#
+# This is the region vocabulary of the emulator matrix and of the woodfuel added
+# to it. Both are renamed from this one file, so the two always agree on what a
+# region is called -- two files that disagreed by a single name would share no
+# rows at all, and the woodfuel step would quietly add nothing.
+#
+# The file goes with the region set the input tarballs carry: the two are named
+# together in messageix/R/pipeline_infrastructure.R, so they cannot drift apart.
+# Another region set is another entry there and another table beside this one.
+#
+# Lines starting with "#" are comments.
+#
+magpie_code;messageix_name
+# GLO is MAgPIE's own code for the global total; World maps to itself so that a
+# table already written in MESSAGEix names survives the rename unchanged.
+AFR;SubSaharanAfrica
+CHA;ChinaReg
+CPA;PlannedAsiaChina
+EEU;CentralEastEurope
+FSU;FormerSovietUnion
+LAM;LatinAmericaCarib
+MEA;MidEastNorthAfrica
+NAM;NorthAmerica
+PAO;PacificOECD
+PAS;OtherPacificAsia
+SAS;SouthAsia
+WEU;WesternEurope
+GLO;World
+World;World

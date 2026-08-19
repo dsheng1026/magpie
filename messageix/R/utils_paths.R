@@ -1,38 +1,30 @@
 # |  The naming contract for the MAgPIE -> MESSAGEix pipeline.
 # |
 # |  Every folder name, run title, GAMS scenario-column name and patch-tarball
-# |  name is built here and nowhere else. Names carry the full design (SSP,
-# |  BII target, bioenergy price, GHG price, stage), so re-running a stage is
-# |  idempotent and no crosswalk file is needed.
+# |  name is built here and nowhere else. A name carries the design it stands
+# |  for, so re-running a stage lands in the same place and no crosswalk file is
+# |  needed.
 # |
-# |  Two encodings of the bioenergy price level are in play and both are
-# |  required, because MAgPIE reads them in different places:
-# |    folder token    zero-padded to 2   BE00 BE05 BE07 BE10 BE15 BE25 BE45
-# |    scenario column unpadded           SSP2_BD00_BE0 _BE5 _BE7 _BE10 ...
-# |  The scenario column is the name of a column in f60_bioenergy_dem.cs3 and
-# |  must match byte for byte what cfg$gms$c60_2ndgen_biodem requests.
+# |  One narrative, one folder. Everything a narrative varies is in the
+# |  identifier it is given, so the names below it need carry only the position
+# |  in the sweep:
 # |
-# |  Patch tarballs are content-hashed. MAgPIE decides whether to re-extract
-# |  inputs by comparing tarball *filenames* against input/info.txt
-# |  (scripts/start_functions.R, download trigger), never checksums, so
-# |  rewriting a tarball under its old name leaves the model running on stale
-# |  data and stale generated sets.gms. A name that changes with the content
-# |  makes reuse-on-re-run correct by construction.
+# |    stage 1   output/<identifier>/tau
+# |    stage 2   output/<identifier>/BE05
+# |    stage 3   output/<identifier>/BE05_G0400
 # |
-# |  Run folder layout:
-# |    stage 1  output/<identifier>/<title>
-# |    stage 2  output/<identifier>/<preflag>/<title>
-# |    stage 3  output/<identifier>/<preflag>/<title>
-# |  Stage 1 sits one level up because its tau trajectory is reusable across
-# |  narratives -- but only across narratives that agree on every stage-1
-# |  setting, and several of those are preset-driven (c13_tccost,
-# |  c14_yields_scenario, c_timesteps, the step-1 protection and bioenergy-demand
-# |  scenarios, the input tarballs). Two presets that differ in any of them write
-# |  to the same folder and the second overwrites the first. The condition is
-# |  therefore made checkable rather than assumed: stage 1 writes a fingerprint
-# |  of those settings into its run folder and the step-1.5 generator refuses to
-# |  build a patch from a run whose fingerprint disagrees with its preset
-# |  (messageix/R/utils_runs.R).
+# |  Price levels are written one way and one way only: zero-padded, 2 digits
+# |  for the bioenergy price and 4 for the GHG price. The same padded token names
+# |  the run folder, the bioenergy demand column the stage-2 patch writes, and
+# |  the column stage 3 asks for -- so the two sides of that handshake cannot
+# |  drift apart. Whole numbers only: a price of 7.5 has no token.
+# |
+# |  Patch tarballs are content-hashed. MAgPIE decides whether to unpack input
+# |  data again by comparing the tarball names it was asked for against the names
+# |  recorded in input/info.txt, and never looks inside the files. A tarball
+# |  rewritten under its old name is therefore ignored, and the run quietly
+# |  proceeds on the previous run's data. Letting the name change with the
+# |  contents makes reuse on a re-run correct by construction.
 # |
 # |  Interface
 # |    pad_int(x, width)                    -> chr; zero-padded integer, errors on non-integers
@@ -40,9 +32,9 @@
 # |    ghg_token(ghg)                       -> chr; "G0400"
 # |    bio_scen_tag(be)                     -> chr; "BIO05", the matrix BIOscen tag
 # |    ghg_scen_tag(ghg)                    -> chr; "GHG400", the matrix GHGscen tag
-# |    region_rename                        -> named chr; MAgPIE region code -> MESSAGEix name
-# |    preflag(pcfg)                        -> chr(1); "SSP2_BD00"
-# |    scen_column(pcfg, be)                -> chr; "SSP2_BD00_BE5" (unpadded)
+# |    region_names_file(pcfg)              -> chr(1); the region set's region-name table
+# |    region_rename(pcfg)                  -> named chr; MAgPIE region code -> MESSAGEix name
+# |    scen_column(pcfg, be)                -> chr; "default_BE05"
 # |    ghg_scenario(pcfg, ghg)              -> chr; "G0400exp2110"
 # |    stage_token(stage)                   -> chr(1); 1|2|3 -> "tau"|"price"|"demand"
 # |    run_title(pcfg, stage, be, ghg)      -> chr(1); cfg$title for one run
@@ -50,19 +42,21 @@
 # |    run_folder(pcfg, stage, be, ghg)     -> chr(1); concrete run directory, repo-relative
 # |    locate_run_folder(pcfg, stage, be, ghg) -> chr(1) path, or NA_character_ if absent
 # |    expected_run_folders(pcfg, stage)    -> data.frame(be, ghg, title, folder)
-# |    content_hash(files, n = 8)           -> chr(1); lower-case hex digest of file contents
+# |    matrix_grid(pcfg, run_dir, layout)   -> data.frame(be, ghg, title, folder); matrix row order
+# |    content_hash(files)                  -> chr(1); lower-case hex digest of file contents
 # |    patch_tarball_name(preset, stage, files) -> chr(1); "<preset>_<stage>_<hash>.tgz"
 # |
-# |  Dependencies: base R (tools, utils) and messageix/R/utils_log.R.
+# |  Dependencies: base R (tools, utils) and messageix/R/utils_log.R. region_rename()
+# |  additionally uses presets_dir() and read_pipeline_csv() from utils_config.R,
+# |  which are loaded by the time any resolved preset exists.
 
 if (!exists("log_die", mode = "function")) source("messageix/R/utils_log.R")
 
 # ---- integer tokens ---------------------------------------------------------
 
 # Zero-pad an integer-valued number. Non-integers are rejected rather than
-# rounded: the folder token and the scenario column would disagree silently
-# (BE08 vs _BE7.5) and the run would fail deep inside GAMS on an unknown set
-# element instead of here.
+# rounded: a rounded token would name a run for a price it was not run at, and
+# the mistake would surface only when somebody read the results.
 pad_int <- function(x, width) {
   x <- as.numeric(x)
   if (any(is.na(x))) log_die("pad_int: non-numeric value")
@@ -89,47 +83,79 @@ ghg_token <- function(ghg) paste0("G", pad_int(ghg, 4L))
 bio_scen_tag <- function(be)  paste0("BIO", pad_int(be, 2L))
 ghg_scen_tag <- function(ghg) paste0("GHG", pad_int(ghg, 3L))
 
-# MAgPIE R12 code -> MESSAGEix long name: the region vocabulary of the matrix
-# and of the woodfuel table added to it, which must be one vocabulary or the two
-# tables share no key. "World" maps to itself; "GLO" is the safety net for a
-# mapped mif carrying the MAgPIE-style global code instead of the mif's "World".
-# Unmatched regions pass through unchanged.
-region_rename <- c(
-  AFR = "SubSaharanAfrica",  CHA = "ChinaReg",          CPA = "PlannedAsiaChina",
-  EEU = "CentralEastEurope", FSU = "FormerSovietUnion", LAM = "LatinAmericaCarib",
-  MEA = "MidEastNorthAfrica", NAM = "NorthAmerica",     PAO = "PacificOECD",
-  PAS = "OtherPacificAsia",  SAS = "SouthAsia",         WEU = "WesternEurope",
-  GLO = "World",             World = "World"
-)
+# ---- region names -----------------------------------------------------------
 
-# ---- narrative and scenario names -------------------------------------------
-
-# Narrative prefix: SSP plus the BII target in whole percent.
-# The 2-digit pad restricts bii_target to multiples of 0.01 below 1; anything
-# finer would collide (0.075 and 0.75 both padding to "75").
-preflag <- function(pcfg) {
-  bl <- as.numeric(pcfg$bii_target)
-  if (is.na(bl) || bl < 0 || bl >= 1) {
-    log_die("preflag: bii_target must lie in [0, 1), got ", bl)
+# The table of region names this narrative works in. It comes with the region
+# set, so it cannot disagree with the input tarballs. A bare file name is a file
+# in messageix/presets/; a name with a directory in it is used as given, so a
+# table kept outside the repository also works.
+region_names_file <- function(pcfg) {
+  name <- as.character(pcfg$region_names)
+  if (!length(name) || !nzchar(name)) {
+    log_die("region set '", pcfg$region_set, "' names no region-name table")
   }
-  if (abs(bl * 100 - round(bl * 100)) > 1e-9) {
-    log_die("preflag: bii_target must be a multiple of 0.01, got ", bl)
-  }
-  paste0(pcfg$ssp, "_BD", pad_int(round(bl * 100), 2L))
+  if (identical(basename(name), name)) file.path(presets_dir(), name) else name
 }
+
+# Read once per file, not once per run: the woodfuel step asks for this table
+# inside a loop over 84 runs.
+.REGION_RENAME_CACHE <- new.env(parent = emptyenv())
+
+# MAgPIE region code -> MESSAGEix region name, as a named character vector.
+#
+# This is the region vocabulary of the emulator matrix and of the woodfuel table
+# added to it. Both are renamed from this one table, because two tables that
+# disagree by a single name produce two files that share no key and a woodfuel
+# step that quietly adds nothing. A region the table does not name passes
+# through unchanged.
+#
+# Working at another region resolution is one new region set: its tarballs and
+# this table, listed together in messageix/R/pipeline_infrastructure.R. See
+# messageix/docs/pipeline.md, "New region set".
+region_rename <- function(pcfg) {
+  path <- region_names_file(pcfg)
+  key <- normalizePath(path, mustWork = FALSE)
+  cached <- .REGION_RENAME_CACHE[[key]]
+  if (!is.null(cached)) return(cached)
+
+  if (!file.exists(path)) {
+    log_die("region-name table not found: ", path, ". Region set '", pcfg$region_set,
+            "' names '", pcfg$region_names, "', and a bare file name is looked for in ",
+            presets_dir())
+  }
+  tab <- read_pipeline_csv(path, "region-name table")
+  if (ncol(tab) < 2L) {
+    log_die("region-name table ", path, " has ", ncol(tab),
+            " column(s); it takes two: the MAgPIE region code and the MESSAGEix name")
+  }
+  codes <- trimws(tab[[1L]])
+  names_out <- trimws(tab[[2L]])
+  keep <- nzchar(codes) & nzchar(names_out)
+  if (!any(keep)) log_die("region-name table ", path, " holds no region rows")
+  if (anyDuplicated(codes[keep])) {
+    log_die("region-name table ", path, " names the region code(s) ",
+            unique(codes[keep][duplicated(codes[keep])]), " more than once")
+  }
+  out <- stats::setNames(names_out[keep], codes[keep])
+  assign(key, out, envir = .REGION_RENAME_CACHE)
+  out
+}
+
+# ---- scenario column names --------------------------------------------------
 
 # Column name of the second-generation bioenergy demand trajectory that stage 2
 # writes into f60_bioenergy_dem.cs3 and stage 3 selects with c60_2ndgen_biodem.
-# Unpadded on purpose -- see the header.
+# It carries the narrative's name so that one glance at the file says which
+# experiment the column belongs to, and the same padded price token the run
+# folder uses so the two cannot disagree.
 scen_column <- function(pcfg, be) {
-  be <- as.numeric(be)
-  if (any(is.na(be))) log_die("scen_column: non-numeric bioenergy price")
-  paste0(preflag(pcfg), "_BE", format(be, trim = TRUE, scientific = FALSE))
+  paste0(pcfg$preset, "_", be_token(be))
 }
 
-# Column name of the GHG price trajectory in f56_pollutant_prices.cs3.
-# The suffix records the extension rule of the trajectory beyond the last
-# reported year (default "exp2110": exponentially extended to 2110).
+# Column name of the GHG price trajectory in f56_pollutant_prices.cs3. The
+# suffix records the extension rule of the trajectory beyond the last reported
+# year (default "exp2110": exponentially extended to 2110). These columns are
+# supplied from outside the pipeline, so this spelling is not ours to change.
 ghg_scenario <- function(pcfg, ghg) {
   paste0(ghg_token(ghg), pcfg$ghg_price_scenario_suffix)
 }
@@ -156,28 +182,26 @@ stage_token <- function(stage) {
 
 # ---- run titles and folders -------------------------------------------------
 
-# cfg$title for a single run.
-#   stage 1  "<ssp>_tau"                       reference tau, one run
-#   stage 2  "<preflag>_BE<pp>_G0000price"     GHG price is zero throughout
-#   stage 3  "<preflag>_BE<pp>_G<pppp>demand"
+# cfg$title for a single run: the position in the sweep, and nothing else.
+# Everything the narrative varies is already in the folder it sits in.
+#   stage 1  "tau"
+#   stage 2  "BE05"
+#   stage 3  "BE05_G0400"
 run_title <- function(pcfg, stage, be = NULL, ghg = NULL) {
   stage <- .as_stage(stage)
-  if (stage == 1L) return(paste0(pcfg$ssp, "_tau"))
+  if (stage == 1L) return("tau")
   if (is.null(be)) log_die("run_title: stage ", stage, " needs a bioenergy price")
-  if (stage == 2L) {
-    return(paste0(preflag(pcfg), "_", be_token(be), "_", ghg_token(0), "price"))
-  }
+  if (stage == 2L) return(be_token(be))
   if (is.null(ghg)) log_die("run_title: stage 3 needs a GHG price")
-  paste0(preflag(pcfg), "_", be_token(be), "_", ghg_token(ghg), "demand")
+  paste0(be_token(be), "_", ghg_token(ghg))
 }
 
 # cfg$results_folder, in MAgPIE's template form. start_run() substitutes
 # :title: with cfg$title. No :date: placeholder: run folders are addressed by
 # name from expected_run_folders(), which a timestamp would defeat.
 results_folder <- function(pcfg, stage) {
-  stage <- .as_stage(stage)
-  if (stage == 1L) return(file.path("output", pcfg$identifier, ":title:"))
-  file.path("output", pcfg$identifier, preflag(pcfg), ":title:")
+  .as_stage(stage)
+  file.path("output", pcfg$identifier, ":title:")
 }
 
 # The concrete directory a run writes to, relative to the model root.
@@ -188,7 +212,7 @@ run_folder <- function(pcfg, stage, be = NULL, ghg = NULL) {
 
 # The run folder if it exists on disk, NA_character_ otherwise. Callers collect
 # the NAs and fail once with the full list, rather than dying on the first gap.
-# Existence is not solvedness -- check modelstat in fulldata.gdx for that.
+# Existence is not solvedness -- utils_runs.R answers that question.
 locate_run_folder <- function(pcfg, stage, be = NULL, ghg = NULL) {
   path <- run_folder(pcfg, stage, be = be, ghg = ghg)
   if (dir.exists(path)) path else NA_character_
@@ -217,6 +241,43 @@ expected_run_folders <- function(pcfg, stage) {
   grid
 }
 
+# Run titles as an older set of runs on the cluster spells them: the SSP and the
+# biodiversity target in front, a word for the stage behind. Nothing writes
+# these -- they exist so the matrix step can be pointed at runs made before this
+# pipeline and used to check its output against them, without a folder of runs
+# having to be renamed.
+.legacy_run_title <- function(pcfg, be, ghg) {
+  bl <- as.numeric(pcfg$bii_target)
+  if (abs(bl * 100 - round(bl * 100)) > 1e-9 || bl < 0 || bl >= 1) {
+    log_die("the legacy layout writes the biodiversity target as two digits, so it takes a ",
+            "multiple of 0.01 below 1; this narrative has bii_target ", bl)
+  }
+  paste0(pcfg$ssp, "_BD", pad_int(round(bl * 100), 2L), "_",
+         be_token(be), "_", ghg_token(ghg), "demand")
+}
+
+# The stage-3 runs in the order the emulator matrix wants them: bioenergy price
+# varies fastest, GHG price slowest. Both matrix steps build their grid here so
+# their rows line up with each other. The run folders sit directly under the
+# directory the caller names, because the matrix steps are pointed at a run
+# directory rather than deriving one.
+#
+#   layout  "current" for runs this pipeline made; "legacy" to read a set of
+#           runs made before it, which is a validation exercise and not a way
+#           to produce anything
+#
+# Columns: be, ghg, title, folder.
+matrix_grid <- function(pcfg, run_dir, layout = c("current", "legacy")) {
+  layout <- match.arg(layout)
+  grid <- expand.grid(be = pcfg$be_prices, ghg = pcfg$ghg_prices, KEEP.OUT.ATTRS = FALSE)
+  grid$title <- vapply(seq_len(nrow(grid)), function(k) {
+    if (identical(layout, "legacy")) .legacy_run_title(pcfg, grid$be[k], grid$ghg[k])
+    else run_title(pcfg, 3L, be = grid$be[k], ghg = grid$ghg[k])
+  }, character(1))
+  grid$folder <- file.path(run_dir, grid$title)
+  grid
+}
+
 # ---- patch tarball naming ---------------------------------------------------
 
 # Digest of a set of file contents, independent of file order and of the
@@ -224,7 +285,12 @@ expected_run_folders <- function(pcfg, stage) {
 # per-file digests are sorted by basename, concatenated and digested again via
 # a temporary file, because tools::md5sum works on files rather than strings.
 # Base R only -- the pipeline must run on a cluster R with no extra packages.
-content_hash <- function(files, n = 8L) {
+#
+# Eight characters, not a settable width: the drivers recognise a generated
+# tarball by a pattern that spells out eight, so a shorter or longer digest
+# would produce a name the driver refuses to use.
+content_hash <- function(files) {
+  n <- 8L
   missing <- files[!file.exists(files)]
   if (length(missing)) log_die("content_hash: file not found: ", missing)
   sums <- tools::md5sum(normalizePath(files, mustWork = TRUE))

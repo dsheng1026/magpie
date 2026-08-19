@@ -2,9 +2,9 @@
 # |
 # |  Every line the pipeline prints goes through this file. The format is
 # |  ">> VERB: message" so a cluster log can be filtered with a single grep,
-# |  e.g. `grep '^>> SOLVE:' slurm-*.out`. Verbs are upper-case bare words;
+# |  e.g. `grep '^>> SUBMIT:' slurm-*.out`. Verbs are upper-case bare words;
 # |  the vocabulary in use is CONFIG, EXTRACT, PACK, SUBMIT, RUN, CHECK,
-# |  MATRIX, WOODFUEL, WRITE, SKIP, DONE.
+# |  MATRIX, WOODFUEL, WRITE, SKIP, WAIT, STEP, EXEC, NARRATIVE, DONE.
 # |
 # |  Drivers and the runner narrate. Operation functions never print — they
 # |  return values or stop with a message.
@@ -13,6 +13,7 @@
 # |    log_step(verb, ...)        -> invisible(NULL); prints ">> VERB: <msg>"
 # |    log_warn(...)              -> invisible(NULL); prints ">> WARN: <msg>"
 # |    log_die(...)               -> never returns; stop() with ">> FATAL: <msg>"
+# |    log_report(lines)          -> invisible(NULL); a long report, printed in full
 # |    log_banner(title, entries) -> invisible(NULL); boxed run summary
 # |    log_fmt(...)               -> character(1); the shared message formatter
 # |
@@ -54,6 +55,15 @@ log_warn <- function(...) {
 # in a SLURM log, where the R call stack adds noise and no context.
 log_die <- function(...) {
   stop(sprintf(">> FATAL: %s", log_fmt(...)), call. = FALSE)
+}
+
+# A multi-line report, printed as it is. R cuts a stop() message short at a few
+# thousand characters, and a list of 84 run names is longer than that, so a
+# failure prints its full detail here first and stops with the count afterwards.
+log_report <- function(lines) {
+  cat(paste(lines, collapse = "\n"), "\n", sep = "")
+  utils::flush.console()
+  invisible(NULL)
 }
 
 # Boxed key/value summary, printed once per driver invocation so a log file
