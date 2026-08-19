@@ -1,5 +1,6 @@
 # The experiment design: rows are the settings a narrative varies, columns are narratives.
 # A new narrative is a new column -- copy `default`, change what the narrative is about.
+# What every row means, its units and allowed values: docs/parameters.md
 key;default;biodiversity
 ssp;SSP2;SSP2
 region_set;R12;R12
