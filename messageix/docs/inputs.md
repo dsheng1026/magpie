@@ -40,9 +40,8 @@ recipe.
 
 `5ff27be8` is the hash MAgPIE assigns to the MESSAGE R12 region mapping
 (`AFR CHA CPA EEU FSU LAM MEA NAM PAO PAS SAS WEU`); upstream's default H12 mapping hashes to
-`62eff8f7`. **The region set is delivered by the tarball, never by a committed file** — MAgPIE
-rebuilds `core/sets.gms` from the mapping inside the tarball on every input download
-(`pipeline.md` §4).
+`62eff8f7`. The region set travels inside the tarball and is never a committed file; how MAgPIE
+rebuilds its own region sets from it on every input download is `pipeline.md` §4.
 
 ---
 

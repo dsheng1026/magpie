@@ -144,16 +144,22 @@ into a fresh file. That is not optional. MAgPIE looks up two demand columns by n
 run whatever scenario was selected — the `c60_2ndgen_biodem_noselect` default
 `R34M410-SSP2-NPi2025`, used in regions outside the selected policy set, and
 `R32M46-SSP2EU-NPi`, the path early years are harmonised against — so both have to survive into
-the patched file or GAMS stops on an unknown set element.
+the patched file or GAMS stops on an unknown set element. Neither name is written down in the
+pipeline: both are read out of the bioenergy module's own code every time the inputs are packed,
+so a MAgPIE version that renames one of them stops the packing rather than every run.
 
 The same tarball carries `f56_pollutant_prices.cs3` with twelve `G####exp2110` GHG price
 trajectory columns over `(t_all, i, pollutants, ghgscen56)` in USD17MER per t. **That file is
 supplied by whoever runs the pipeline** (`--f56=PATH`); nothing in the repository generates it
-(see `decisions.md`, open items). What the packing step does do is check it: the pollutant
-sub-dimension must come first and must match MAgPIE's set of taxable pollutants exactly, because
-MAgPIE builds its list of selectable GHG price scenarios from the *second* sub-dimension of the
-file — written the other way round, the pollutant names would become the scenario list and no
-run could resolve its `c56_pollutant_prices` column.
+(see `decisions.md`, open items). What the packing step does do is check its **structure**: the
+pollutant sub-dimension must come first and must match MAgPIE's set of taxable pollutants
+exactly, because MAgPIE builds its list of selectable GHG price scenarios from the *second*
+sub-dimension of the file — written the other way round, the pollutant names would become the
+scenario list and no run could resolve its `c56_pollutant_prices` column — and the file must
+carry one column per GHG price level the experiment sweeps, every model year, and no gaps. The
+prices themselves are not checked and cannot be: a wrong trajectory under the right column name
+passes every check here and changes all 84 runs, which is why the file comes from the person who
+knows what is in it.
 
 ### demand — the GHG price sweep, 84 runs
 
