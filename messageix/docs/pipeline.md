@@ -8,6 +8,10 @@ land deliver at a given bioenergy price and GHG price, and what land outcomes �
 prices, land cover — follow.** Three phases of MAgPIE runs, the packing between them, and a
 reduce phase produce that response surface.
 
+The settings, the run command, the inputs you need first, and the open questions
+are in [`tool-surface.md`](tool-surface.md). This page is the science underneath
+them, and [`decisions.md`](decisions.md) is the decision log.
+
 ---
 
 ## 1. Workflow
@@ -393,192 +397,45 @@ cannot check that one.
 
 ## 6. Defaults that carry science weight
 
-Each is a deliberate choice. `N` = a `narrative()` or `design()` setting in
-`messageix/experiments.R`; `I` = an infrastructure setting in code, overridable per machine or
-per command; `D` = documented default, settled where it is used; `F` = fixed by the phase. Where
-a value was settled in earlier MAgPIE work rather than derived here, `decisions.md` records the
-lineage.
-
-| Setting | Value | Why | Owner |
-| --- | --- | --- | --- |
-| `c14_yields_scenario` | `nocc` — yields exclude climate change | Defensible at 1–1.5 °C, where yield impacts are small. Scenarios approaching 2 °C should use `cc`, where they are material. | N |
-| `c13_tccost` | `high` | Makes intensifying existing cropland expensive, so the model leans more on expansion. Settled in earlier MAgPIE experiments. MAgPIE default `medium` | N |
-| `s30_annual_max_growth` | `0.02` — cropland growth capped at 2 %/yr per region | A deliberate brake on how fast the sweep may reallocate land. Settled in earlier MAgPIE experiments. MAgPIE default `Inf`, i.e. no brake | N |
-| `s44_cost_bii_missing` | `1e7` USD17MER — 10x the MAgPIE default | Keeps gaps in the BII data from being the cheapest place to put land-use pressure. Settled in earlier MAgPIE experiments | N |
-| `s56_limit_ch4_n2o_price` | `200` USD17MER/tC | Empirical abatement-cost curves show very little non-CO2 abatement is available above roughly this price, and the cap keeps food prices plausible under strong mitigation. MAgPIE default `4920` | N |
-| `s44_bii_target` | `0` | Narrative setting; alternatives tested so far 0.7 / 0.74 / 0.78 | N |
-| `c44_bii_decrease` | `1` in the two sweeps, `0` in the calibrate phase | Follows from the BII target: loss is permitted exactly where no target is imposed | F |
-| `c22_protect_scenario` | `BH` in the calibrate phase, `none` in the two sweeps | Property of the golden runs; see `decisions.md`, open items | N |
-| `s15_rumdairy_scp_substitution` | `0` | Narrative setting; alternatives tested so far 25 / 50 / 75 % | N |
-| `prices_bioenergy` | `0, 5, 7, 10, 15, 25, 45` $2005/GJ | Levels chosen where land-use models change behaviour, with enough coverage around the turning points that interpolating between them lands on a sensible surface. Reconfirmed at the version bump | N |
-| `prices_ghg` | `0 … 4000`, exponentially extended to 2110 | as above | N |
-| Currency conversion | `1.23` for $2005 → $2017 | A MAgPIE-team factor. **Standing attention item** — MAgPIE's base year moves when MAgPIE updates, so revisit at every version bump. One value, two reciprocal uses (`x1.23` on prices into MAgPIE, `x0.813` on prices out via the mapping), and both must move together | I |
-| `c_timesteps` | `coup2110` | The MESSAGE horizon; MAgPIE default `coup2100`. Packing checks its output against the model years of this token | I |
-| `s60_2ndgen_bioenergy_dem_min` | `0` | MAgPIE's default of 1 mio. GJ/yr would put a floor under the demand sweep. Applied in the two sweeps only | I |
-| `s60_bioenergy_1st_subsidy` | `0` | MAgPIE's default of 6.5 USD17/GJ acts as a price floor under the bioenergy price sweep. Applied in the two sweeps only | I |
-| Woodfuel energy content | `18` GJ/tDM | A MAgPIE-team value, used in place of the energy content carried in the solver output | D |
-| Gap fill | adjacent-year mean; post-2100 held at 2100 | Past 2100 there is no later reported year to average against, so the level is held flat | D |
-| Historical 2nd-gen bioenergy | zero for 1995–2015 | No such production existed, and MAgPIE harmonises its early years against a reference path regardless. Coded as a replaceable vector | D |
-| GWP100 | CH4 27, N2O 273 | AR6 | D |
-| `tc` realization | `exo` in the price sweep, solved for elsewhere | This is what defines the phase | F |
+Moved. Every setting, its default and the reason for that default are in
+[`tool-surface.md`](tool-surface.md) section 3, one entry per setting.
 
 ---
 
 ## 7. Naming contract
 
-Defined once, in `messageix/R/utils_paths.R`. One experiment writes into one folder, so the
-names below it carry only the position in the sweep. A price level is written one way and one
-way only — zero-padded — wherever it appears.
-
-| Token | Form | Example |
-| --- | --- | --- |
-| BE token | `BE` + zero-pad to 2 | `BE00 BE05 BE07 BE10 BE15 BE25 BE45` |
-| GHG token | `G` + zero-pad to 4 | `G0000 … G4000` |
-| Identifier | regionscode, plus the experiment's name unless it is `default` | `MESSAGEix_5ff27be8` |
-| Results folder | `output/<identifier>/<title>` | `output/MESSAGEix_5ff27be8/BE45_G4000` |
-| Calibrate title | `tau` | `tau` |
-| Price title | `<BE token>` | `BE05` |
-| Demand title | `<BE token>_<GHG token>` | `BE45_G4000` |
-| Bioenergy demand column | `<experiment>_<BE token>` | `default_BE05`, `biodiversity_BE05` |
-| GHG price column | `<GHG token>` + the extension suffix | `G0400exp2110` |
-| Matrix tags | `BIO` + pad2, `GHG` + pad3 | `BIO45`, `GHG4000` |
-| Packed tarball | `<experiment>_<price\|demand>_<8hexhash>.tgz` | |
-| Calibration record | `<calibration run folder>/messageix_stage1_fingerprint.txt` | |
-
-The bioenergy demand column name is a handshake between two steps of this pipeline and nothing
-else: packing writes those columns into `f60_bioenergy_dem.cs3` and the demand sweep asks for
-one of them through `c60_2ndgen_biodem`. They must match character for character or GAMS stops on
-an unknown set element, so both are built by the same function from the same integer. The GHG
-price column is different in kind — those trajectories are supplied from outside the pipeline
-under the names their author gave them, so `G0400exp2110` is a contract this repository keeps
-rather than a name it chooses.
-
-### An experiment's identity is derived, not chosen
-
-Read the table again from the run's point of view: a run folder is
-`output/<identifier>/<title>`, and the title carries only the position in the sweep. Nothing
-below the identifier records the biodiversity target, the microbial-protein share, the
-protection scenario, the yield scenario or the region set.
-
-The identifier is therefore what separates one experiment from another, and it does so by
-construction:
-
-```
-identifier       = MESSAGEix_<regionscode>                for the experiment named `default`
-                   MESSAGEix_<regionscode>_<experiment>   for every other experiment
-matrix_basename  = magpie_input_<ssp>_ref                 for the experiment named `default`
-                   magpie_input_<ssp>_<experiment>        for every other experiment
-regionscode        the middle token of the regional tarball name, rev<revision>_<code>_magpie.tgz
-```
-
-Two experiments cannot collide, because two entries of one list cannot share a name — `run.R`
-asserts it once before anything starts rather than assuming it. The experiment named `default`
-carries no name token, which is what keeps the pinned matrix at
-`magpie_input_SSP2_ref_woodfuel.csv`. An experiment's name becomes a folder name and a GAMS set
-element, so it takes letters, digits, dash and underscore only.
-
-Nothing may set these values. An experiment that could choose its own names could choose another
-experiment's, and since a re-run may overwrite a folder of the same name, the second run would
-replace the first without saying so.
+Moved. The full token table and the derivation of an experiment's identity are
+in [`tool-surface.md`](tool-surface.md) section 5, "The naming contract".
 
 ---
 
 ## 8. Region sets
 
-Which regions MAgPIE solves for is the one structural lever of the world. An experiment names a
-region set (`region_set = "R12"`) and never the files: the set is what pairs the four input
-tarballs with the region-name table that has to agree with them, listed together in
-`region_sets()` in `messageix/R/pipeline_infrastructure.R`.
-
-Everything else about the configuration surface — which settings exist, who owns each of them,
-and how one is overridden per machine or per command — is documented in the file that declares
-it; [`../README.md`](../README.md) says which file that is for each kind of setting.
-
-### New region set
-
-The emulator matrix is written in MESSAGEix region names, and MAgPIE reports MAgPIE region
-codes. The translation is a two-column file, not code:
-`messageix/data/region_names_R12.csv`, which the R12 region set carries and which is
-resolved relative to `messageix/data/`. Both halves of the reduce phase read it — the matrix
-builder to rename the mapped results, the woodfuel half to rename what it extracts. One file,
-so the two tables cannot disagree.
-
-Both steps require the file to name **every** region their runs report, and stop naming both
-sides when it does not. A total mismatch is the harmless case; the dangerous one is partial,
-because region sets overlap — R10 and R12 share eleven of their twelve codes — so runs at the
-wrong resolution would be renamed where the codes agree and left in MAgPIE's codes where they
-do not, giving a matrix that looks complete and carries two vocabularies. The woodfuel step
-adds one more stop of the same kind: every `Primary Energy|Biomass` row of the matrix must
-receive woodfuel in at least one year, so a scenario tag or region that finds no match is an
-error rather than a quietly thinner file.
-
-Moving to another region set, R10 for instance, is one lookup entry and one table:
-
-1. Obtain the input tarballs for that region set and put them where `cfg$repositories` finds
-   them (`inputs.md`).
-2. Write `messageix/data/region_names_R10.csv`: one row per MAgPIE region code, plus the
-   `GLO` and `World` rows that keep the global total named consistently.
-3. Add an `R10` entry to `region_sets()` in `messageix/R/pipeline_infrastructure.R`, pairing
-   the four tarball names with that table.
-4. Set `region_set = "R10"` in an experiment's `narrative()` — the identifier follows, because
-   it carries the region code out of the new regional tarball, so R10 runs cannot land in the
-   R12 folders.
-5. Calibrate again for that experiment and run the pipeline.
-
-The lookup entry is the only code that changes, and it is a list of file names. What does not
-come free is cell-level aggregation to an arbitrary region set at run time — that needs a
-tarball per region set today (`inputs.md`, "Future: the version × region matrix").
+Moved. The region-set mechanism and the recipe for adding one are in
+[`tool-surface.md`](tool-surface.md) section 6, "A new region set".
 
 ---
 
 ## 9. Execution environment
 
-Emulator generation runs on the **PIK cluster**. This is a storage constraint, not a
-preference: a single MAgPIE run produces over 1 GB and full emulator generation needs roughly
-**90 GB**, against a ~100 GB quota on UniCC. Three reporting levels per run inflate the output
-further; trimming that is a conversation with the MAgPIE team, not a pipeline task. Access is
-by requesting a PIK cluster account. Running the whole pipeline on UniCC is a long-term
-aspiration.
-
-Nothing about the environment is hard-coded. Module lists, QOS, repositories and mail settings
-are infrastructure settings: a code default in `messageix/R/pipeline_infrastructure.R`, which
-documents each of them, overridable per machine through `MAGPIE_MM_QOS`, `MAGPIE_MM_MODULES`
-and `MAGPIE_MM_MAIL_USER`, and per command through `--set`. `messageix/R/utils_env.R` is where
-they are asked for. The job script the pipeline submits holds no copy of them: it is generated
-from the resolved experiment, so the queue, the module lines and the mail address come from the
-same place as everything else.
-
-The environment the pipeline is tested against:
-
-```
-module purge
-module load defaults/piam/1.27
-module load R/4.3.2
-module load gcc/15.2.0      # last: the compiled piam packages (gdx2 -> Rcpp)
-                            # need CXXABI_1.3.15 from this libstdc++
-```
-
-**R packages.** Beyond what MAgPIE itself needs (`gms`, `lucode2`, `magclass`, `gdx2`,
-`magpie4`) and `iamc` for the variable mapping, the pipeline's own code uses the tidyverse
-packages it does its table work with: `readr`, `dplyr`, `tidyr`, `tibble`, `purrr` and
-`stringr`. They are in the PIK `defaults/piam` module above. They are used namespace-qualified
-(`dplyr::filter`) and never attached, so nothing this pipeline loads masks a base function in a
-session that sources it.
-
-Submission: `start_run()` detects SLURM and runs `sbatch submit_<cfg$qos>.sh` from the run
-folder, using MAgPIE's own `scripts/run_submit/` scripts. `qos = "priority"` is a PIK QOS
-name and is an infrastructure default.
+Moved. Where the pipeline runs, the storage constraint behind that choice, and
+the environment settings are in [`tool-surface.md`](tool-surface.md) section 5,
+"Where it runs", with each setting documented in section 3.4.
 
 ---
 
 ## 10. Validation
 
-**The golden runs.** With the pinned R12 tarballs and the `default` experiment, the emitted
+**The golden runs.** With the pinned R12 tarballs and the `golden` experiment, the emitted
 matrix matches `magpie_input_SSP2_ref_woodfuel.csv` region by region and variable by variable
-within solver tolerance. The pre-woodfuel `magpie_input_SSP2_ref.csv` is the intermediate
-check. Both names are derived from the experiment: the entry named `default` gives
-`magpie_input_SSP2_ref`, the reduce phase writes that under `--matrix-dir`, and the woodfuel
-half appends `_woodfuel`.
+within solver tolerance. `golden` pins the three narrative values the reference runs were made
+with, which the registry defaults no longer carry: the non-CO2 price cap at 200, `tc_cost` at
+`high`, and step-1 protection at `BH` (`tool-surface.md`, "`default` and `golden`"). It is the
+experiment the naming rules special-case, so it writes `magpie_input_SSP2_ref` and the woodfuel
+half appends `_woodfuel`: it regenerates the reference file in place. Keep a copy of the
+reference before a rebuild if the comparison below is what you want. The pre-woodfuel
+`magpie_input_SSP2_ref.csv` is the intermediate check. A bare `Rscript messageix/run.R` excludes
+`golden`; name it to run it.
 
 **Compare on keys, not on line order.** The comparison is a join on
 `Region × Variable × SSPscen × GHGscen × BIOscen × SDGscen × year`, and it passes when every key
