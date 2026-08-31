@@ -1,0 +1,42 @@
+# Template. Copy, fill the factor column, pass with --pollutant-map=<your copy>.
+# There is no default map: omitting --pollutant-map stops the run.
+#
+# Shipped unfilled on purpose. Every factor is a modelling choice the MESSAGE run
+# made too, and the two have to be the same choice. Nothing fails when they
+# differ; the prices are simply wrong and every MAgPIE run inherits them. The
+# worked values in the table below are the common case, not an answer.
+#
+# `factor` multiplies the deflated CO2 price (USD17MER per t CO2) to give the
+# price MAgPIE applies to that pollutant, in MAgPIE's own mass basis for it.
+# Each factor is a mass conversion times a global warming potential:
+#
+#   pollutant        mass basis            GWP100      factor if AR6
+#   co2_c            per t C   44/12       1           3.6666667
+#   ch4              per t CH4 1           27.0        27
+#   n2o_n_direct     per t N   44/28       273         429
+#   n2o_n_indirect   per t N   44/28       273         429
+#   nh3_n, no2_n, no3_n   not greenhouse gases        0
+#
+# GWP100 values are the IPCC AR6 WGI Chapter 7 (Table 7.15) 100-year values:
+# 27.0 for non-fossil methane, which is what agricultural CH4 is, and 273 for
+# N2O. A MESSAGE run reporting on AR5 values needs 28 and 265 here instead.
+# Fossil methane is 29.8 in AR6 and is not what MAgPIE emits.
+#
+# The nitrogen pollutants nh3_n, no2_n and no3_n are in MAgPIE's taxable set but
+# are not greenhouse gases, so they are left unpriced. The pinned runs did the
+# same; confirm it is still what you want.
+#
+# The non-CO2 cap does NOT belong here. Trajectories stay uncapped; the cap is
+# applied inside GAMS by cfg$gms$s56_limit_ch4_n2o_price, set from the
+# nonco2_price_cap_usd17_tc lever in messageix/R/world_levers.R.
+#
+# Pollutant list: the GAMS set pollutants(pollutants_all),
+# modules/56_ghg_policy/price_aug22/sets.gms:183.
+pollutant;factor
+co2_c;
+ch4;
+n2o_n_direct;
+n2o_n_indirect;
+nh3_n;
+no2_n;
+no3_n;

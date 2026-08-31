@@ -552,6 +552,10 @@ run_phase_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
     return(invisible(TRUE))
   }
 
+  # Pre-run vetting: read-only checks that stop on FAIL before anything is submitted.
+  if (!exists("vet_pre_run", mode = "function")) source("messageix/vetting/vet_pre_run.R")
+  vet_pre_run(pcfg, stage)
+
   for (i in seq_len(nrow(runs))) {
     run_stage(pcfg, stage, be = .sweep_arg(runs$be[i]), ghg = .sweep_arg(runs$ghg[i]),
               dry_run = opt$dry_run, first = (i == 1L))
