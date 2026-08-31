@@ -50,6 +50,7 @@
 # |    write_stage1_fingerprint(pcfg, folder)  -> invisible(chr(1)); the path written
 # |    stage1_state(pcfg)                      -> chr(1); absent|unrecorded|matches|differs
 # |    assert_stage1_fingerprint(pcfg, folder) -> invisible(TRUE)
+# |    stage1_fingerprint_diff(pcfg, folder)   -> chr; "key: recorded -> asked" lines
 # |
 # |  Dependencies: base R, dplyr/purrr, messageix/R/utils_config.R, and -- at call time only,
 # |  so that the CLIs still parse without them -- magpie4 and gdx2.
@@ -119,6 +120,7 @@ stage1_fingerprint <- function(pcfg) {
     c(`ssp`                    = .fingerprint_value(pcfg$ssp),
       `protect_scenario_step1` = .fingerprint_value(pcfg$protect_scenario_step1),
       `biodem_scenario_step1`  = .fingerprint_value(pcfg$biodem_scenario_step1),
+      `bii_target`             = .fingerprint_value(pcfg$bii_target),
       `input_regional`         = .fingerprint_value(pcfg$input_regional),
       `input_cellular`         = .fingerprint_value(pcfg$input_cellular),
       `input_validation`       = .fingerprint_value(pcfg$input_validation),
@@ -214,6 +216,27 @@ assert_stage1_fingerprint <- function(pcfg, folder) {
            pcfg$experiment, " --phase=calibrate --force")))
   log_die("the calibration run in ", folder, " was solved for other settings; the settings that ",
           "differ, and the command that fixes it, are printed in full above")
+}
+
+# The keys and values that differ between a stage-1 folder's recorded
+# fingerprint and what pcfg now asks for, as "key: recorded -> asked" lines.
+# Shared by the project-folder guard in pipeline.R: a project folder's tau is
+# fixed by whichever experiment calibrated it first, so a later experiment that
+# disagrees is stopped rather than allowed to re-solve into the same folder.
+stage1_fingerprint_diff <- function(pcfg, folder) {
+  path <- file.path(folder, STAGE1_FINGERPRINT_FILE)
+  found <- readLines(path, warn = FALSE)
+  found <- found[nzchar(trimws(found))]
+  wanted <- stage1_fingerprint(pcfg)
+  keys <- sort(union(sub("=.*$", "", found), sub("=.*$", "", wanted)))
+  differing <- vapply(keys, function(key) {
+    ran <- .fingerprint_lookup(found, key)
+    asked <- .fingerprint_lookup(wanted, key)
+    if (identical(ran, asked)) NA_character_ else
+      paste0("    ", key, ": recorded '", ran, "', experiment '", pcfg$experiment, "' asks for '",
+             asked, "'")
+  }, character(1))
+  differing[!is.na(differing)]
 }
 
 # ---- waiting for a stage to finish ------------------------------------------

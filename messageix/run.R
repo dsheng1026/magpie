@@ -39,7 +39,9 @@
 # |  hands the whole thing to the cluster as one job and returns.
 # |
 # |  Interface
-# |    chosen_experiments(opt)              -> chr; the experiments this command covers
+# |    chosen_experiments(opt)              -> chr; the experiments this command covers.
+# |                                             A bare command excludes `golden`, which runs
+# |                                             only when named explicitly.
 # |    print_experiment_names(configs, opt)  -> invisible; where each experiment's work lands
 # |    experiment_collisions(configs, opt)  -> chr; experiments writing to the same place
 # |    run_flags_through(opt, verb, names)  -> chr; this command line, for the submitted copy
@@ -53,11 +55,15 @@ source("messageix/R/pipeline.R")
 # ---- which experiments ------------------------------------------------------
 
 # The experiments this command covers: the ones named on the command line, in
-# the order named, or every experiment of messageix/experiments.R.
+# the order named, or every experiment of messageix/experiments.R except
+# `golden`. `golden` is a reproduction check against the pinned reference
+# output (magpie_input_SSP2_ref*), not a sweep member, so a bare run does not
+# spend a calibration run and 84 demand runs re-proving it -- it runs only when
+# named explicitly: `Rscript messageix/run.R golden`.
 chosen_experiments <- function(opt) {
   available <- experiment_names()
   wanted <- c(opt$positional, if (is.null(opt$experiment)) character(0) else opt$experiment)
-  if (!length(wanted)) return(available)
+  if (!length(wanted)) return(setdiff(available, "golden"))
   unknown <- setdiff(wanted, available)
   if (length(unknown)) {
     log_die(paste(unknown, collapse = ", "), " is not an experiment in ", experiments_file(),

@@ -120,6 +120,11 @@ infrastructure_spec <- function() {
       default = "", type = "chr", env = "MAGPIE_MM_INPUT_CALIBRATION",
       unit = "calibration tarball; empty means no calibration entry at all, which is what the pinned runs used"),
 
+    # --- calibration reuse ---
+    project = list(
+      default = "", type = "chr", env = "MAGPIE_MM_PROJECT",
+      unit = "when set, stage 1 (calibrate) writes to output/_calibration/<project> instead of the experiment's own folder, so experiments sharing this value and the same tau-determining settings reuse one calibration run. Empty keeps today's per-experiment folder"),
+
     # --- run control ---
     output_modules = list(
       default = c("output_check", "rds_report"), type = "chr_vec", env = "MAGPIE_MM_OUTPUT_MODULES",
@@ -199,15 +204,15 @@ regionscode_of <- function(tarball) {
 # because runs at different region resolutions are different runs; the
 # experiment's name is in it because the run folder names below carry only the
 # position in the sweep, so two experiments would otherwise overwrite each
-# other. The experiment named `default` carries no name token, which is what
+# other. The experiment named `golden` carries no name token, which is what
 # keeps the pinned runs where they have always been.
 experiment_identifier <- function(regionscode, experiment) {
-  if (identical(experiment, "default")) paste0("MESSAGEix_", regionscode)
+  if (identical(experiment, "golden")) paste0("MESSAGEix_", regionscode)
   else paste0("MESSAGEix_", regionscode, "_", experiment)
 }
 
 # The matrix CSV one experiment writes, without the extension. The woodfuel half
 # of the reduce phase appends _woodfuel to it.
 experiment_matrix_basename <- function(ssp, experiment) {
-  paste0("magpie_input_", ssp, "_", if (identical(experiment, "default")) "ref" else experiment)
+  paste0("magpie_input_", ssp, "_", if (identical(experiment, "golden")) "ref" else experiment)
 }

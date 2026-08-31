@@ -289,6 +289,20 @@ plan_steps <- function(steps, pcfg, opt) {
     } else if (complete[i]) {
       "done"
     } else if (identical(names[i], "calibrate") && identical(stage1_state(pcfg), "differs")) {
+      if (nzchar(pcfg$project)) {
+        folder <- run_folder(pcfg, 1L)
+        log_report(c(
+          paste0(">> FATAL: project '", pcfg$project, "'s calibration folder ", folder,
+                 " was solved under settings that differ from experiment '", pcfg$experiment, "':"),
+          stage1_fingerprint_diff(pcfg, folder),
+          paste0("  tau is fixed per project: every experiment sharing project '", pcfg$project,
+                 "' re-solves into the same folder, so settings that differ would alternately ",
+                 "overwrite each other's calibration."),
+          "  Rename this experiment's --project so it no longer shares the folder, or align its ",
+          "settings with the ones the project already recorded."))
+        log_die("project '", pcfg$project, "'s calibration folder was solved under other ",
+                "settings; the settings that differ, and how to fix it, are printed in full above")
+      }
       "re-solve"
     } else {
       "pending"

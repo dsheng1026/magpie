@@ -183,7 +183,7 @@ world_levers <- function() {
       default = 0,
       class   = "switch",
       mapping = by_phase_logic("s44_bii_target",
-                               "set in the price and demand sweeps, paired with c44_bii_decrease, which permits BII loss exactly when no target is imposed"),
+                               "set in the calibrate phase and the price and demand sweeps, paired with c44_bii_decrease, which permits BII loss exactly when no target is imposed"),
       check   = function(value) {
         if (is.na(value) || value < 0 || value >= 1) {
           log_die("bii_target is a share of the biodiversity intactness index and lies in ",
@@ -215,9 +215,9 @@ world_levers <- function() {
 
     protect_scenario_step1 = lever(
       meaning = "which land protection scenario the reference land-use intensity trajectory is calibrated under",
-      values  = "a MAgPIE protection scenario, e.g. none, BH, WDPA",
+      values  = "a MAgPIE protection scenario, e.g. none, BH, WDPA. MAgPIE's own default is none, per the sibling protect_scenario lever",
       type    = "chr",
-      default = "BH",
+      default = "none",
       class   = "switch",
       mapping = by_phase_logic("c22_protect_scenario", "set in the calibrate phase")),
 
@@ -233,7 +233,7 @@ world_levers <- function() {
       meaning = "how costly yield-increasing technological change is",
       values  = "high / medium / low. high makes intensifying existing cropland expensive, so the model leans more on expanding it; MAgPIE's default is medium",
       type    = "chr",
-      default = "high",
+      default = "medium",
       class   = "switch",
       mapping = to_switch("c13_tccost")),
 
@@ -264,9 +264,9 @@ world_levers <- function() {
 
     nonco2_price_cap_usd17_tc = lever(
       meaning = "cap on the price applied to CH4 and N2O, USD17MER per tC",
-      values  = "positive; 200 is roughly 55 USD17 per tCO2, above which empirical abatement-cost curves show very little non-CO2 abatement, and it keeps food prices plausible under strong mitigation. MAgPIE's default is 4920",
+      values  = "positive; 200 is roughly 55 USD17 per tCO2, above which empirical abatement-cost curves show very little non-CO2 abatement, and it keeps food prices plausible under strong mitigation. MAgPIE's default is 4920. 734 is the Earth Commission target of 200 USD2017 per tCO2 (734 = 200 * 3.67)",
       type    = "num",
-      default = 200,
+      default = 734,
       class   = "switch",
       mapping = by_phase_logic("s56_limit_ch4_n2o_price",
                                "set in the demand sweep only: the calibration run is made under a near-term-policy price path and the price sweep runs at zero GHG price, where a cap is inert"),

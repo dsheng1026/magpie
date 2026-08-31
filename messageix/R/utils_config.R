@@ -30,9 +30,12 @@
 # |
 # |  The golden runs. "Golden runs" is the set of runs behind the reference
 # |  matrix magpie_input_SSP2_ref_woodfuel.csv, the artefact this pipeline has to
-# |  reproduce before it can be trusted with anything new. The `default`
-# |  experiment plus the stage logic below reproduce them exactly, including three
-# |  asymmetries that look like oversights and are not:
+# |  reproduce before it can be trusted with anything new. The `golden`
+# |  experiment (messageix/experiments.R) plus the stage logic below reproduce
+# |  them exactly. Since 2026-08-31 the registry defaults carry the Earth
+# |  Commission values (cap 734, tc_cost "medium", step-1 protection "none"),
+# |  so `default` no longer does; `golden` pins the original values. The
+# |  reproduction includes three asymmetries that look like oversights and are not:
 # |
 # |    1. Stage 1 runs c22_protect_scenario = "BH" while stages 2 and 3 run
 # |       "none". The reference land-use intensity trajectory is calibrated under
@@ -112,12 +115,17 @@ read_pipeline_csv <- function(path, what = "CSV") {
   lines <- lines[!startsWith(trimws(lines), "#") & nzchar(trimws(lines))]
   if (!length(lines)) log_die(what, " holds no data rows: ", path)
   delim <- if (grepl(";", lines[1L], fixed = TRUE)) ";" else ","
-  readr::read_delim(I(paste(lines, collapse = "\n")),
+  tbl <- readr::read_delim(I(paste(lines, collapse = "\n")),
                     delim = delim,
                     col_types = readr::cols(.default = readr::col_character()),
                     name_repair = "minimal",
                     trim_ws = TRUE,
                     progress = FALSE)
+  # Named on the result rather than returned as a second value, so every
+  # existing caller keeps working; a caller diagnosing a bad read (a quoted
+  # ";" in a comma file's header would sniff the wrong delimiter) can name it.
+  attr(tbl, "mm_delim") <- delim
+  tbl
 }
 
 # ---- command line -----------------------------------------------------------
@@ -510,6 +518,11 @@ pipeline_owned_switches <- function() {
   if (identical(key, "slurm_modules") && !length(value)) {
     log_die("slurm_modules must name at least one module")
   }
+  if (identical(key, "project") && nzchar(value) && !grepl("^[A-Za-z0-9][A-Za-z0-9_-]*$", value)) {
+    log_die("project '", value, "' becomes a path segment in output/_calibration/<project>, SLURM ",
+            "job names and rsync arguments, so it takes letters, digits, dash and underscore only, ",
+            "starting with a letter or digit.")
+  }
   invisible(TRUE)
 }
 
@@ -541,6 +554,13 @@ load_experiments <- function(file = experiments_file()) {
   found <- get("EXPERIMENTS", envir = env)
   if (!is.list(found) || !length(found) || is.null(names(found)) || any(!nzchar(names(found)))) {
     log_die("EXPERIMENTS in ", file, " must be a named list with at least one entry")
+  }
+  if (anyDuplicated(names(found))) {
+    dupes <- unique(names(found)[duplicated(names(found))])
+    log_die("EXPERIMENTS in ", file, " names ", paste(dupes, collapse = ", "), " more than once -- ",
+            "an experiment written directly and one read from CSV can collide on the same name. ",
+            "Each entry runs once and writes to a folder named after it, so a duplicate would run ",
+            "twice into the same folder. Rename one of them.")
   }
   # A bare narrative() is accepted where an experiment() was meant: it is the
   # same thing with the default sampling plan, and refusing it would be pedantry.
@@ -801,6 +821,10 @@ stage_cfg <- function(pcfg, stage, be = NULL, ghg = NULL) {
     # Reference tau: technological change stays endogenous (cfg$gms$tc untouched,
     # i.e. endo_jan22) because exporting that trajectory is the point of the run.
     cfg$gms$c44_bii_decrease     <- 0
+    # Golden-run invariant #2 is c44_bii_decrease, not s44_bii_target: only set
+    # the target here when a narrative asks for one, so bii_target's default of
+    # 0 leaves the calibrate phase untouched.
+    if (bl != 0) cfg$gms$s44_bii_target <- bl
     cfg$gms$c22_protect_scenario <- pcfg$protect_scenario_step1
     cfg$gms$c60_2ndgen_biodem    <- pcfg$biodem_scenario_step1
     cfg$title <- run_title(pcfg, stage)

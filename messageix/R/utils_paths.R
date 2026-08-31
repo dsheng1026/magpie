@@ -13,6 +13,10 @@
 # |    stage 2   output/<identifier>/BE05
 # |    stage 3   output/<identifier>/BE05_G0400
 # |
+# |  Stage 1 moves to output/_calibration/<project>/tau instead when the
+# |  `project` infrastructure setting is non-empty, so experiments in the same
+# |  project reuse one calibration run (messageix/R/pipeline_infrastructure.R).
+# |
 # |  Price levels are written one way and one way only: zero-padded, 2 digits
 # |  for the bioenergy price and 4 for the GHG price. The same padded token names
 # |  the run folder, the bioenergy demand column the stage-2 patch writes, and
@@ -217,8 +221,17 @@ run_title <- function(pcfg, stage, be = NULL, ghg = NULL) {
 # cfg$results_folder, in MAgPIE's template form. start_run() substitutes
 # :title: with cfg$title. No :date: placeholder: run folders are addressed by
 # name from expected_run_folders(), which a timestamp would defeat.
+#
+# Stage 1 with pcfg$project set is the one exception to one-experiment-one-
+# folder: it writes to a project-keyed folder instead of the experiment's own,
+# so experiments sharing a project and the same tau-determining settings share
+# one calibration run. stage1_fingerprint() still guards reuse -- a project
+# folder is only taken as-is when its recorded settings match.
 results_folder <- function(pcfg, stage) {
-  .as_stage(stage)
+  stage <- .as_stage(stage)
+  if (stage == 1L && !is.null(pcfg$project) && nzchar(pcfg$project)) {
+    return(file.path("output", "_calibration", pcfg$project, ":title:"))
+  }
   file.path("output", pcfg$identifier, ":title:")
 }
 
