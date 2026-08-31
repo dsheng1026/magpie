@@ -1,0 +1,11 @@
+# Layered over narratives_base.csv. "base" starts this narrative from the
+# "default" column of that file, so the two rows below are the only things
+# that differ. Semicolon-delimited, as European exports are written.
+#
+# High biodiversity protection under climate-impacted yields: 78 percent of
+# the biodiversity intactness index maintained, and crop yields that carry
+# climate change impacts.
+setting;biodiversity
+base;default
+bii_target;0.78
+yields_scenario;cc

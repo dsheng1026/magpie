@@ -1,0 +1,7 @@
+# The price levels each narrative's two sweeps visit. "|" separates the levels
+# in a cell, and spaces work too for numbers. An empty cell keeps the grid the
+# pipeline was tested on -- default, golden and biodiversity all ship at that
+# grid. Every column here names a narrative.
+setting,default,golden,biodiversity
+prices_bioenergy,,,
+prices_ghg,,,

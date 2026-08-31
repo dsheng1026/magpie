@@ -1,0 +1,24 @@
+# The world each narrative is run in, one column per narrative. An empty cell
+# sets nothing: the setting keeps the default registered in R/world_levers.R.
+# This file is the primary declaration for the pipeline's two non-layered
+# experiments; narratives_biodiversity.csv layers a third over it.
+#
+# default: the registry defaults with nothing overridden -- since 2026-08-31
+# those defaults carry the Earth Commission values (non-CO2 price cap 734,
+# tc_cost "medium", step-1 protection "none"). ssp is restated explicitly at
+# its own registry default so this column names at least one setting, which
+# the loader requires of every narrative -- it changes nothing.
+#
+# golden: pins the three values the golden runs were made with, before the
+# defaults moved to the Earth Commission values. Run it to prove the pipeline
+# still rebuilds magpie_input_SSP2_ref_woodfuel.csv -- the validated reference
+# this pipeline has to reproduce before it is trusted with anything new
+# (messageix/docs/pipeline.md, section 10). Opt-in: run.R excludes it by name
+# from a bare `Rscript messageix/run.R`, and it only runs when named
+# explicitly (`Rscript messageix/run.R golden`), so a routine sweep does not
+# spend a calibration run and 84 demand runs re-proving this reference.
+setting,default,golden
+ssp,SSP2,
+tc_cost,,high
+protect_scenario_step1,,BH
+nonco2_price_cap_usd17_tc,,200

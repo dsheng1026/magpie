@@ -1,4 +1,6 @@
 # The model root's .gitignore matches *.cs*, which would otherwise catch the two
-# tables this pipeline ships. Nothing else under messageix/ is generated.
+# tables this pipeline ships and the example configs. Nothing else under
+# messageix/ is generated.
 !data/MM_linkage_mapping.csv
 !data/region_names_R12.csv
+!config/*.csv
