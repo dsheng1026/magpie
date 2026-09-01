@@ -5,6 +5,10 @@ command does underneath it, where the seams are, and what is still open. Written
 for a MAgPIE-side reader who knows the model and wants to know what this overlay
 adds around it.
 
+For the short path — declare a narrative, generate a start script, run the two
+sweeps, reduce to a matrix — see [`lightweight-mode.md`](lightweight-mode.md)
+instead; this page is the full reference.
+
 Two other pages remain. [`pipeline.md`](pipeline.md) holds the science: what tau
 is, how the patch tarballs work inside MAgPIE, how the matrix and the woodfuel
 step are built, and how a build is validated. [`decisions.md`](decisions.md) is
@@ -109,8 +113,7 @@ it different. The name on the left becomes the output folder, the matrix file
 name, and the bioenergy demand column the phases hand to each other, so it takes
 letters, digits, dash and underscore.
 
-The split between the two halves is worth stating plainly, because it was asked
-in the 2026-08-25 session. The world is everything that would still be true if
+The split between the two halves: the world is everything that would still be true if
 the sampling grid were finer. The sampling plan is everything that decides how
 many runs there are. A biodiversity target is a world setting. A twelve-level
 GHG price grid is a sampling plan.
@@ -437,12 +440,10 @@ of carbon, not per tonne of CO2. Multiply a USD-per-tCO2 figure by 3.67 to get
 this one.
 **CSV row.** `nonco2_price_cap_usd17_tc`, in a narrative CSV.
 **Default.** `734`, which is the Earth Commission target of 200 USD2017 per
-tCO2 (200 times 3.67). Decided in the 2026-08-25 session and confirmed with the
-scenario leads.
-**Golden value.** `200`, pinned by the `golden` experiment. That number was the
-unit confusion the session resolved: 200 USD17 per tC is roughly 55 USD per
-tCO2, far below the intended cap. MAgPIE's own default is `4920`, effectively
-uncapped for this purpose.
+tCO2 (200 times 3.67). Decided in the 2026-08-25 session.
+**Golden value.** `200`, pinned by the `golden` experiment. 200 USD17 per tC is
+about 55 USD per tCO2, far below the intended cap. MAgPIE's own default is
+`4920`, effectively uncapped for this purpose.
 
 #### The escape hatch: `gms$<switch>`
 
@@ -953,15 +954,20 @@ They are described here from the spec's design
 (`specs/2026-08-25-earth-commission-config-and-feedback-loop.md`), and their
 final file names may differ.
 
-- **`feedback_prep/`**, in the MESSAGE branch. It takes MESSAGE output from a
-  run that used the emulator under test, and computes the weighted-average
-  carbon price and the second-generation bioenergy demand. Its science
-  assumptions (the weighting variable, the deflator, the GWP basis, and which
-  bioenergy variables are summed) are listed under "ASSUMPTIONS TO CONFIRM" in
-  `feedback_prep/README.md` and await confirmation. The pollutant map is a required argument and stops the run when absent; the others apply defaults that do not fail loudly when wrong. Read that section before a production run.
-- **`feedback_run/`**, for MAgPIE. It takes `feedback_prep`'s output, runs a
-  standalone MAgPIE run, and produces results to compare against MESSAGE's
-  land-use output.
+- **`messageix/optional/feedback_prep/`**, in the MESSAGE branch. It takes
+  MESSAGE output from a run that used the emulator under test, and computes
+  the weighted-average carbon price and the second-generation bioenergy
+  demand. Its science assumptions (the weighting variable, the deflator, the
+  GWP basis, and which bioenergy variables are summed) are listed under
+  "ASSUMPTIONS TO CONFIRM" in `feedback_prep/README.md` and await
+  confirmation. The pollutant map is a required argument and stops the run
+  when absent; the others apply defaults that do not fail loudly when wrong.
+  Read that section before a production run. Optional; not part of the
+  lightweight flow ([`lightweight-mode.md`](lightweight-mode.md)).
+- **`messageix/optional/feedback_run/`**, for MAgPIE. It takes
+  `feedback_prep`'s output, runs a standalone MAgPIE run, and produces
+  results to compare against MESSAGE's land-use output. Optional, alongside
+  `feedback_prep/`, for the same reason.
 - **A vetting module** inside the MAgPIE folder within MESSAGEix. It runs simple
   checks before MESSAGE runs. The feedback pair validates after a run; this one
   gates before one.
@@ -1031,13 +1037,13 @@ decision. The fingerprint stays, because a shared cache makes a stale trajectory
 easier to hit rather than harder.
 
 **`feedback_prep` rather than `magpie_calibrate`.** The name `magpie_calibrate`
-was used through most of the 2026-08-25 session and walked back near the end of
-it. "Calibrate" oversold what the module does. Its scope is a preparation step:
-compute the weighted-average carbon price and the second-generation bioenergy
-demand, and hand off ready-made inputs for the standalone MAgPIE run. Diagnosing
-a mismatch is human work that happens afterwards. Note that the structured
-meeting notes for that date still carry the earlier name, so someone who read
-only those may still be using it.
+was used through most of the 2026-08-25 session; the name changed near the end
+of it, because "calibrate" overstated what the module does. Its scope is a
+preparation step: compute the weighted-average carbon price and the
+second-generation bioenergy demand, and hand off ready-made inputs for the
+standalone MAgPIE run. Diagnosing a mismatch is human work that happens
+afterwards. The structured meeting notes for that date still carry the earlier
+name.
 
 ---
 
@@ -1058,8 +1064,8 @@ only those may still be using it.
   emulator into MESSAGE can raise feasibility problems, and resolving one is
   MESSAGE-side work. The optimistic path is that an emulator added through the
   MESSAGE-side registration function and passing the normal scenario workflow
-  needs no further human intervention. That is a hope rather than a result, and
-  it was flagged in the session as a real risk.
+  needs no further human intervention. This is unverified and was flagged in
+  the session as a risk.
 - **Whether MAgPIE's interactive package-update prompt conflicts with the
   pipeline's forced download.** Both touch the same input tarballs. The
   tentative answer was that it depends on the user and they probably coexist.
@@ -1069,8 +1075,9 @@ only those may still be using it.
   tooling. The PIK cluster has three QoS tiers and a project allocation there is a
   prerequisite either way. Undecided.
 - **Which repository the feedback run belongs in.** Partly resolved: it runs
-  outside the MAgPIE wrapper, in `feedback_prep/` and `feedback_run/` on the
-  MESSAGE side. The exact repository boundary is not settled.
+  outside the MAgPIE wrapper, in `messageix/optional/feedback_prep/` and
+  `messageix/optional/feedback_run/` on the MESSAGE side. The exact
+  repository boundary is not settled.
 - **`yields_scenario`.** The session flagged the step-1 parameters for review
   and this one was left at `nocc` pending confirmation with the team rather than
   changed.

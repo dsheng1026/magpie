@@ -33,7 +33,7 @@ be packed without the other.
    get them: [`docs/tool-surface.md`](docs/tool-surface.md), section 4.
 2. **The GHG price file** — `f56_pollutant_prices.cs3`, one column per GHG price
    level the demand sweep visits. **Nothing in this repository builds it**; ask
-   Di Sheng for it. What it has to contain is written out in full by
+   the MAgPIE team for it. What it has to contain is written out in full by
    `Rscript messageix/R/pack_demand.R` run with no `--f56`, and described in
    [`docs/pipeline.md`](docs/pipeline.md).
 
@@ -291,9 +291,10 @@ to MESSAGEix, which this pipeline supplies rather than models.
 - `config/` — the narrative and design CSVs that declare the pipeline's
   experiments, the primary surface for adding or changing one
 - `data/` — the region-name table, and the variable mapping the matrix is built with
-- `docs/` — `tool-surface.md` (every setting, the run command, the inputs you
-  need first, and the open questions), `pipeline.md` (the science),
-  `decisions.md` (why it is built this way, and what is open)
+- `docs/` — `lightweight-mode.md` (the short path: submit runs by hand through
+  MAgPIE's own menu), `tool-surface.md` (every setting, the run command, the
+  inputs you need first, and the open questions), `pipeline.md` (the
+  science), `decisions.md` (why it is built this way, and what is open)
 - `NOTICE` — the upstream project, the licence relationship, and who wrote what
 
 `run_phase.R`, the two packing scripts and the two reduce scripts are the
@@ -301,9 +302,10 @@ debugging surface: each also runs on its own
 (`Rscript messageix/R/pack_price.R --experiment=NAME`) when one step has to be
 rebuilt or watched alone. Every R entry point takes `--help` and accepts each
 option both as `--key=value` and as `--key value`. Start with
-[`docs/tool-surface.md`](docs/tool-surface.md) for the settings and what you
-need before you can run it, and [`docs/pipeline.md`](docs/pipeline.md) for what
-the pipeline computes.
+[`docs/lightweight-mode.md`](docs/lightweight-mode.md) for the short,
+hand-submitted path, [`docs/tool-surface.md`](docs/tool-surface.md) for the
+settings and what you need before you can run it, and
+[`docs/pipeline.md`](docs/pipeline.md) for what the pipeline computes.
 
 ## Two things that surprise people
 

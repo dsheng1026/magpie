@@ -1,6 +1,6 @@
 # |  Auto-generated PIK-cluster start scripts for MAgPIE's "projects" menu.
 # |
-# |  Gap this closes (spec B3, 2026-08-25 meeting, owner Dominik, due
+# |  Gap this closes (spec B3, 2026-08-25 meeting, due
 # |  2026-09-01): MAgPIE's interactive start flow (`scripts/start/`, menu
 # |  option 8 "projects") lists any script dropped into
 # |  `scripts/start/projects/`, but the MAgPIE -> MESSAGEix pipeline has no
@@ -23,7 +23,7 @@
 # |    2. `messageix/generated/start_scripts/<name>.R` -- a retained copy for
 # |       reproducibility, independent of what happens to copy 1.
 # |
-# |  IMPORTANT, found while building this file and not yet acted on: the spec
+# |  Found while building this file and not yet acted on: the spec
 # |  for this item assumed `scripts/start/projects/` is git-ignored, "matching
 # |  the existing MAgPIE wrapper convention". It is not -- `git ls-files
 # |  scripts/start/projects` lists 44 tracked scripts, and `.gitignore` has no
@@ -35,7 +35,7 @@
 # |  (e.g. a `mm_*.R` glob, so hand-written project scripts stay tracked), or
 # |  (b) accept that copy 1 is scratch and rely only on the retained copy for
 # |  reproducibility. This file takes no position and does not touch
-# |  `.gitignore` -- that is a repo-wide decision for Dominik/team, not
+# |  `.gitignore` -- that is a repo-wide decision for the team, not
 # |  something a standalone generator should decide unilaterally.
 # |
 # |  Interface

@@ -1,6 +1,6 @@
 # feedback_run -- the MAgPIE side of the emulator feedback check
 
-Takes what `messageix/feedback_prep/` produced, runs MAgPIE against it, and puts
+Takes what `messageix/optional/feedback_prep/` produced, runs MAgPIE against it, and puts
 the result next to MESSAGE's own land-use output in one table.
 
 **Scope.** This runs the comparison and writes it down. It does not interpret a
@@ -10,7 +10,7 @@ mismatch and does not decide what to change when the two sides disagree.
 
 ```
 MESSAGE run (emulator under test)
-  -> messageix/feedback_prep/       f56_pollutant_prices.cs3
+  -> messageix/optional/feedback_prep/       f56_pollutant_prices.cs3
                                     f60_bioenergy_dem.cs3
                                     feedback_prep_manifest.csv
   -> start_feedback_run.R           one MAgPIE run on those two columns
@@ -33,7 +33,7 @@ the comparison would be measuring that difference instead of the emulator. Becau
 bioenergy and GHG price level and then overwrites both scenario columns; neither
 level reaches the model.
 
-**Decided 2026-08-31, user-confirmed:** borrowing the grid's first point this way
+**Decided 2026-08-31:** borrowing the grid's first point this way
 is the accepted approach. A feedback run does not get a grid-free stage of its
 own.
 
@@ -44,7 +44,7 @@ proceeding on the previous run's data.
 
 The prep step's own assumptions travel into every run started here: the variable
 names it read the MESSAGE output by, the currency deflator, and the GWP values in
-the pollutant map. They are listed in `messageix/feedback_prep/README.md` under
+the pollutant map. They are listed in `messageix/optional/feedback_prep/README.md` under
 **Assumptions to confirm**, and recorded per run in
 `feedback_prep_manifest.csv`. A comparison read without them is a comparison of
 two things you have not checked are comparable.
@@ -52,11 +52,11 @@ two things you have not checked are comparable.
 ## Usage
 
 ```
-# after messageix/feedback_prep/feedback_prep.R has written its output
-Rscript messageix/feedback_run/start_feedback_run.R --experiment default
+# after messageix/optional/feedback_prep/feedback_prep.R has written its output
+Rscript messageix/optional/feedback_run/start_feedback_run.R --experiment default
 
 # when the run has finished
-Rscript messageix/feedback_run/compare_land_use.R \
+Rscript messageix/optional/feedback_run/compare_land_use.R \
   --run-dir output/<identifier>/feedback/feedback_feedback \
   --iamc    /abs/path/to/message_output.csv
 ```
@@ -72,7 +72,7 @@ Written into `<run-dir>/feedback_comparison/`. The columns are specified in
 and year, carrying both models' values, their difference, and a flag where the
 two units disagree.
 
-**Decided 2026-08-31, user-confirmed:** the comparison table carries no
+**Decided 2026-08-31:** the comparison table carries no
 threshold, no tolerance and no verdict column, and it is not going to grow one.
 What counts as an acceptable difference depends on the variable, on which of the
 four or five emulators is under test, and on what the run is for. A number in

@@ -478,7 +478,7 @@ preflight <- function(steps, plan, pcfg, opt) {
         "the demand sweep needs --f56=PATH: f56_pollutant_prices.cs3, the file of GHG price ",
         "trajectories for this experiment, one column per GHG price level it sweeps. Nothing ",
         "in this repository generates it, and without it there are no prices to sweep. Ask ",
-        "Di Sheng for the file; running Rscript ",
+        "the MAgPIE team for the file; running Rscript ",
         patch_generator_script(3L), " on its own prints the full description of what it has ",
         "to contain."))
     } else if (!file.exists(opt$f56)) {

@@ -49,7 +49,7 @@ No threshold, no tolerance, no pass or fail column, and no ranking of which
 differences matter. That reading is the point of the exercise and it stays with
 the person doing it.
 
-**Decided 2026-08-31, user-confirmed.** This is settled, not an open question:
+**Decided 2026-08-31.** This is settled, not an open question:
 the table stays verdict-free and a human judges the mismatches. Treat a request
 to add a tolerance column as a change of scope, not a gap to fill.
 

@@ -16,7 +16,7 @@
 # |  read as one. A person reads the table.
 # |
 # |  Usage, from the MAgPIE model root:
-# |    Rscript messageix/feedback_run/compare_land_use.R \
+# |    Rscript messageix/optional/feedback_run/compare_land_use.R \
 # |      --run-dir output/MESSAGEix_5ff27be8/feedback/feedback_feedback \
 # |      --iamc /abs/path/message_output.csv
 # |
@@ -41,11 +41,11 @@
 # |    compare_land_use(pcfg, ...)           -> named chr; the files written
 # |
 # |  Dependencies: iamc for write.reportProject(), readr/dplyr/tidyr, and
-# |  messageix/feedback_prep/prep_carbon_price.R for read_iamc(), which brings the
+# |  messageix/optional/feedback_prep/prep_carbon_price.R for read_iamc(), which brings the
 # |  messageix/R/ config layer with it. Run from the MAgPIE model root.
 
 if (!exists("read_iamc", mode = "function")) {
-  source("messageix/feedback_prep/prep_carbon_price.R")
+  source("messageix/optional/feedback_prep/prep_carbon_price.R")
 }
 # write.reportProject() is qualified rather than attached: nothing in this source
 # chain loads iamc, and the bare call died on every invocation.
@@ -177,7 +177,7 @@ compare_land_use <- function(pcfg, run_dir, iamc, variables = character(0),
 
 if (invoked_directly("compare_land_use.R")) {
   usage <- paste(sub("^# \\|", "", grep("^# \\|",
-                 readLines("messageix/feedback_run/compare_land_use.R"),
+                 readLines("messageix/optional/feedback_run/compare_land_use.R"),
                  value = TRUE)), collapse = "\n")
   flags <- parse_flags(commandArgs(trailingOnly = TRUE),
                        known = c("run-dir", "iamc", "scenario", "out-dir", "experiment"),

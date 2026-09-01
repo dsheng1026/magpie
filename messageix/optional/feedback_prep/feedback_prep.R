@@ -14,7 +14,7 @@
 # |  a person.
 # |
 # |  Usage, from the MAgPIE model root:
-# |    Rscript messageix/feedback_prep/feedback_prep.R \
+# |    Rscript messageix/optional/feedback_prep/feedback_prep.R \
 # |      --iamc /abs/path/message_output.csv \
 # |      --experiment default
 # |
@@ -28,11 +28,11 @@
 # |  Interface
 # |    feedback_prep(pcfg, ...) -> named chr; every file written
 # |
-# |  Dependencies: messageix/feedback_prep/prep_bioenergy_demand.R, which brings
+# |  Dependencies: messageix/optional/feedback_prep/prep_bioenergy_demand.R, which brings
 # |  prep_carbon_price.R and the messageix/R/ config layer with it.
 
 if (!exists("prep_bioenergy_demand", mode = "function")) {
-  source("messageix/feedback_prep/prep_bioenergy_demand.R")
+  source("messageix/optional/feedback_prep/prep_bioenergy_demand.R")
 }
 
 # What the run was fed, written beside what it produced.
@@ -52,7 +52,7 @@ feedback_prep <- function(pcfg, iamc, weights_rule = NULL, deflator = NULL,
                           column = "feedback", seed = NULL, out_dir = NULL,
                           write_cs3 = TRUE) {
   dir <- if (is.null(out_dir)) {
-    file.path("messageix", "feedback_prep", "output", pcfg$experiment)
+    file.path("messageix", "optional", "feedback_prep", "output", pcfg$experiment)
   } else out_dir
   log_banner("feedback prep", list(
     experiment = pcfg$experiment,
@@ -107,7 +107,7 @@ feedback_prep <- function(pcfg, iamc, weights_rule = NULL, deflator = NULL,
 
 if (invoked_directly("feedback_prep.R")) {
   usage <- paste(sub("^# \\|", "", grep("^# \\|",
-                 readLines("messageix/feedback_prep/feedback_prep.R"),
+                 readLines("messageix/optional/feedback_prep/feedback_prep.R"),
                  value = TRUE)), collapse = "\n")
   flags <- parse_flags(commandArgs(trailingOnly = TRUE),
                        known = c("iamc", "weights", "deflator", "pollutant-map",

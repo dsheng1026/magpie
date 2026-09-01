@@ -1,6 +1,6 @@
 # |  Run MAgPIE on what MESSAGE asked for.
 # |
-# |  Takes the two files messageix/feedback_prep/ produced out of a MESSAGE run
+# |  Takes the two files messageix/optional/feedback_prep/ produced out of a MESSAGE run
 # |  made with the emulator under test, packs them the way every other stage packs
 # |  its inputs, and starts one MAgPIE run against them:
 # |
@@ -22,10 +22,10 @@
 # |  to a person. Nothing here decides whether the linkage is good enough.
 # |
 # |  Usage, from the MAgPIE model root:
-# |    Rscript messageix/feedback_run/start_feedback_run.R --experiment default
+# |    Rscript messageix/optional/feedback_run/start_feedback_run.R --experiment default
 # |
 # |    --prep-dir DIR     directory holding the feedback_prep output; default
-# |                       messageix/feedback_prep/output/<experiment>
+# |                       messageix/optional/feedback_prep/output/<experiment>
 # |    --column NAME      the scenario column feedback_prep wrote (default "feedback")
 # |    --title NAME       run title (default "feedback_<column>")
 # |    --experiment NAME  an experiment of messageix/experiments.R
@@ -57,14 +57,14 @@ FEEDBACK_FILES <- c(f56 = "f56_pollutant_prices.cs3",
 feedback_files <- function(dir) {
   if (!dir.exists(dir)) {
     log_die("--prep-dir: ", dir, " does not exist. Run ",
-            "Rscript messageix/feedback_prep/feedback_prep.R first")
+            "Rscript messageix/optional/feedback_prep/feedback_prep.R first")
   }
   paths <- file.path(dir, FEEDBACK_FILES)
   names(paths) <- names(FEEDBACK_FILES)
   absent <- paths[!file.exists(paths)]
   if (length(absent)) {
     log_die("--prep-dir: ", dir, " holds no ", basename(absent),
-            ". Run messageix/feedback_prep/feedback_prep.R to produce it")
+            ". Run messageix/optional/feedback_prep/feedback_prep.R to produce it")
   }
   paths
 }
@@ -99,7 +99,7 @@ start_feedback_run <- function(pcfg, prep_dir = NULL, column = "feedback",
                                title = NULL, dry_run = FALSE) {
   assert_magpie_root()
   if (is.null(prep_dir)) {
-    prep_dir <- file.path("messageix", "feedback_prep", "output", pcfg$experiment)
+    prep_dir <- file.path("messageix", "optional", "feedback_prep", "output", pcfg$experiment)
   }
   if (is.null(title)) title <- paste0("feedback_", column)
 
@@ -140,7 +140,7 @@ start_feedback_run <- function(pcfg, prep_dir = NULL, column = "feedback",
 
 if (invoked_directly("start_feedback_run.R")) {
   usage <- paste(sub("^# \\|", "", grep("^# \\|",
-                 readLines("messageix/feedback_run/start_feedback_run.R"),
+                 readLines("messageix/optional/feedback_run/start_feedback_run.R"),
                  value = TRUE)), collapse = "\n")
   flags <- parse_flags(commandArgs(trailingOnly = TRUE),
                        known = c("prep-dir", "column", "title", "experiment"),

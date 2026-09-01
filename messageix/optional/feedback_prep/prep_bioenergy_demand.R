@@ -18,7 +18,7 @@
 # |  Scope: this prepares an input. It does not judge the run it came from.
 # |
 # |  Usage, from the MAgPIE model root:
-# |    Rscript messageix/feedback_prep/prep_bioenergy_demand.R \
+# |    Rscript messageix/optional/feedback_prep/prep_bioenergy_demand.R \
 # |      --iamc /abs/path/message_output.csv \
 # |      --biovar "Primary Energy|Biomass|Modern|w/o CCS" \
 # |      --biovar "Primary Energy|Biomass|Modern|w/ CCS"
@@ -33,7 +33,7 @@
 # |    --seed PATH        f60_bioenergy_dem.cs3 to append the column to; default
 # |                       modules/60_bioenergy/input/f60_bioenergy_dem.cs3
 # |    --no-cs3           write the csv only, skip the f60 file
-# |    --out-dir DIR      default messageix/feedback_prep/output/<experiment>
+# |    --out-dir DIR      default messageix/optional/feedback_prep/output/<experiment>
 # |    --experiment NAME  an experiment of messageix/experiments.R
 # |    --set key=value    override one setting; repeatable
 # |    --help
@@ -48,11 +48,11 @@
 # |    write_f60_column(demand, column, seed, out) -> chr(1); the file written
 # |    prep_bioenergy_demand(pcfg, ...)         -> named chr; the files written
 # |
-# |  Dependencies: magclass, readr/dplyr/tidyr, messageix/feedback_prep/prep_carbon_price.R
+# |  Dependencies: magclass, readr/dplyr/tidyr, messageix/optional/feedback_prep/prep_carbon_price.R
 # |  for read_iamc() and magpie_region_codes(), which brings the config layer with it.
 
 if (!exists("read_iamc", mode = "function")) {
-  source("messageix/feedback_prep/prep_carbon_price.R")
+  source("messageix/optional/feedback_prep/prep_carbon_price.R")
 }
 
 # ---- ASSUMPTION: which variables are second-generation bioenergy ------------
@@ -179,7 +179,7 @@ prep_bioenergy_demand <- function(pcfg, iamc, variables = character(0),
            length(unique(demand$year)), " years, from ", length(variables), " variable(s)")
 
   dir <- if (is.null(out_dir)) {
-    file.path("messageix", "feedback_prep", "output", pcfg$experiment)
+    file.path("messageix", "optional", "feedback_prep", "output", pcfg$experiment)
   } else out_dir
   dir.create(dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -202,7 +202,7 @@ prep_bioenergy_demand <- function(pcfg, iamc, variables = character(0),
 
 if (invoked_directly("prep_bioenergy_demand.R")) {
   usage <- paste(sub("^# \\|", "", grep("^# \\|",
-                 readLines("messageix/feedback_prep/prep_bioenergy_demand.R"),
+                 readLines("messageix/optional/feedback_prep/prep_bioenergy_demand.R"),
                  value = TRUE)), collapse = "\n")
   flags <- parse_flags(commandArgs(trailingOnly = TRUE),
                        known = c("iamc", "scenario", "column", "seed", "out-dir", "experiment"),

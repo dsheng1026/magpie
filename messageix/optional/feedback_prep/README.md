@@ -56,7 +56,7 @@ woodfuel step use, in whichever of three spellings the file carries.
 
 ## Outputs
 
-Written into `--out-dir` (default `messageix/feedback_prep/output/<experiment>/`):
+Written into `--out-dir` (default `messageix/optional/feedback_prep/output/<experiment>/`):
 
 | File                        | What it is                                                     |
 | --------------------------- | -------------------------------------------------------------- |
@@ -72,7 +72,7 @@ is only interpretable next to it.
 ## Usage
 
 ```
-Rscript messageix/feedback_prep/feedback_prep.R \\
+Rscript messageix/optional/feedback_prep/feedback_prep.R \\
   --iamc /abs/path/message_output.csv \\
   --pollutant-map my_pollutant_map.txt
 ```
@@ -83,7 +83,7 @@ under `values_from_defaults`, and listed again at the end of the run. Override
 any of them:
 
 ```
-Rscript messageix/feedback_prep/feedback_prep.R \
+Rscript messageix/optional/feedback_prep/feedback_prep.R \
   --iamc      /abs/path/message_output.csv \
   --weights   "Emissions|CO2" \
   --deflator  1.13 \

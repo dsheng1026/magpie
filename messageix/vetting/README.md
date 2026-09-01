@@ -6,14 +6,14 @@ per run, after a queue wait.
 
 **Scope.** This gates a run before it starts. Whether the emulator's answers
 agree with MESSAGE is a different question, checked after a run by
-`messageix/feedback_prep/` and `messageix/feedback_run/`. Nothing here has an
+`messageix/optional/feedback_prep/` and `messageix/optional/feedback_run/`. Nothing here has an
 opinion about it, and nothing here writes, moves or repairs what it finds.
 
 ## Usage
 
 ```
 Rscript messageix/vetting/vet_pre_run.R --experiment default --stage 3 \
-  --f56 messageix/feedback_prep/output/default/f56_pollutant_prices.cs3
+  --f56 messageix/optional/feedback_prep/output/default/f56_pollutant_prices.cs3
 ```
 
 `--stage` is 1, 2 or 3 and decides which checks apply. `--warn-only` reports
@@ -88,53 +88,3 @@ not make on its own. Until it lands, run the command by hand before submitting a
 phase. Two properties make the call safe to add there: it is read-only, and it
 stops on FAIL, so a driver that reaches its first `start_run()` has already
 passed every check that applies.
-
-## vet_post_matrix.R -- checks that run after a demand sweep
-
-Three checks on a finished bioenergy x GHG demand sweep, reading `report.mif`
-out of the stage-3 run folders the same way `messageix/R/createMatrix_MM.R`
-does. Run it after a demand sweep has solved and reported, before trusting the
-emulator matrix built from it.
-
-```
-Rscript messageix/vetting/vet_post_matrix.R --experiment default
-```
-
-`--pollutant-map PATH` points `gwp_basis` at a pollutant map instead of
-`messageix/data/MM_linkage_mapping.csv`; `--warn-only`, `--set` and `--help`
-work as in `vet_pre_run.R`. `vet_post_matrix()` stops on any FAIL and returns
-the report as a data frame, same PASS/WARN/FAIL contract as above (no `SKIP`
-here -- every check applies to every finished sweep).
-
-| Check                     | What it catches                                                          |
-| -------------------------- | ------------------------------------------------------------------------ |
-| `nonco2_cap_readback`      | a Peatland CH4 or N2O price reading above the experiment's cap           |
-| `bioenergy_monotonicity`   | 2nd-gen bioenergy production falling as the BE price rises (WARN)        |
-| `gwp_basis`                | a pollutant map not built on AR6 GWP100 (CH4=27, N2O=273)                |
-
-`nonco2_cap_readback` turns a sanity check from the notebooks below into an
-assertion: it reads back `Prices|GHG Emission|CH4|Peatland` and
-`...|N2O|Peatland` (Peatland carries the unmodified price signal), converts to
-USD17MER/tC from whatever the report's own `Unit` column says, and fails any
-reading past `nonco2_price_cap_usd17_tc`. A unit string that does not name its
-dollar year or its CO2/CO2-equivalent basis falls back to 2005 dollars on an
-AR5 GWP -- the source notebooks' own reading -- and says in the detail that it
-did, rather than guessing silently.
-
-`bioenergy_monotonicity` is a WARN, not a FAIL: small inversions in
-`Production|Bioenergy|2nd generation|++|Bioenergy crops` at World level as the
-BE price rises, at a fixed GHG price level, are often solver noise rather than
-a broken sweep. It names every inverted (year, GHG level, BE price) pair.
-
-`gwp_basis` generalises a hazard the source notebooks hit without naming it:
-two of their own chunks converted the same Peatland CH4/N2O prices on two
-different GWP bases (25/298 in one, 28/265 in the other). Three bases are in
-circulation for these two gases and none says so on its own -- AR4 (25, 298),
-AR5 (28, 265), AR6 (27, 273) -- so this check reads whichever pollutant map is
-in play and fails if it is not built on AR6, naming the factors found and
-which basis (if any) they match.
-
-These three checks are ported from the MAgPIE-side collaborator's vetting
-notebooks for the same demand sweep; those notebooks' visual panels (bioenergy
-levels, land cover, cumulative AFOLU emissions) remain the reference for the
-figures this module does not attempt to reproduce.

@@ -23,9 +23,9 @@
 # |  Scope: this prepares an input. It does not judge the run it came from.
 # |
 # |  Usage, from the MAgPIE model root:
-# |    Rscript messageix/feedback_prep/prep_carbon_price.R \
+# |    Rscript messageix/optional/feedback_prep/prep_carbon_price.R \
 # |      --iamc /abs/path/message_output.csv --weights none --deflator 1.13 \
-# |      --pollutant-map messageix/feedback_prep/pollutant_map.csv
+# |      --pollutant-map messageix/optional/feedback_prep/pollutant_map.csv
 # |
 # |    --iamc PATH           MESSAGE output in IAMC csv form; required
 # |    --weights RULE        ASSUMPTION. the IAMC variable weighting regional
@@ -35,13 +35,13 @@
 # |                          from the price variable's own currency unit
 # |    --pollutant-map PATH  DECISION. one row per MAgPIE pollutant; required, and
 # |                          there is no default. Start from
-# |                          messageix/feedback_prep/pollutant_map.template.txt
+# |                          messageix/optional/feedback_prep/pollutant_map.template.txt
 # |    --price-variable VAR  carbon price variable (default "Price|Carbon")
 # |    --scenario NAME       the scenario to read, when the file holds several
 # |    --column NAME         scenario column to write (default "feedback")
 # |    --append PATH         f56 to add the column to, instead of a new file
 # |    --out PATH            file to write (default under --out-dir)
-# |    --out-dir DIR         default messageix/feedback_prep/output/<experiment>
+# |    --out-dir DIR         default messageix/optional/feedback_prep/output/<experiment>
 # |    --experiment NAME     an experiment of messageix/experiments.R
 # |    --set key=value       override one setting; repeatable
 # |    --help
@@ -237,7 +237,7 @@ default_deflator <- function(unit, pcfg) {
 # set is the one assumption here that nothing downstream can catch: a MESSAGE run
 # accounting on AR5 (28, 265) silently inheriting AR6 (27.0, 273) writes prices
 # that pass every structural check and are wrong in every run.
-POLLUTANT_MAP_TEMPLATE <- "messageix/feedback_prep/pollutant_map.template.txt"
+POLLUTANT_MAP_TEMPLATE <- "messageix/optional/feedback_prep/pollutant_map.template.txt"
 
 # What a map has to contain, printed when the one given cannot be used.
 pollutant_map_message <- function() {
@@ -424,7 +424,7 @@ prep_carbon_price <- function(pcfg, iamc, weights_rule = NULL, deflator = NULL,
 
   if (is.null(out)) {
     dir <- if (is.null(out_dir)) {
-      file.path("messageix", "feedback_prep", "output", pcfg$experiment)
+      file.path("messageix", "optional", "feedback_prep", "output", pcfg$experiment)
     } else out_dir
     dir.create(dir, recursive = TRUE, showWarnings = FALSE)
     out <- file.path(dir, "f56_pollutant_prices.cs3")
@@ -446,7 +446,7 @@ prep_carbon_price <- function(pcfg, iamc, weights_rule = NULL, deflator = NULL,
 # ---- command line -----------------------------------------------------------
 
 if (invoked_directly("prep_carbon_price.R")) {
-  usage <- paste(sub("^# \\|", "", grep("^# \\|", readLines("messageix/feedback_prep/prep_carbon_price.R"),
+  usage <- paste(sub("^# \\|", "", grep("^# \\|", readLines("messageix/optional/feedback_prep/prep_carbon_price.R"),
                                         value = TRUE)), collapse = "\n")
   flags <- parse_flags(commandArgs(trailingOnly = TRUE),
                        known = c("iamc", "weights", "deflator", "pollutant-map",

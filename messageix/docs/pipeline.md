@@ -453,7 +453,8 @@ stopifnot(nrow(merged) == nrow(reference), nrow(merged) == nrow(built))
 # then compare the year columns pairwise within tolerance
 ```
 
-**Checking against runs made before this pipeline.** Di's existing demand-sweep runs on the PIK
+**Checking against runs made before this pipeline.** The MAgPIE-side collaborator's existing
+demand-sweep runs on the PIK
 cluster are the cheap validation: the reduce phase alone, over runs that already exist, rather
 than 84 fresh jobs. Those folders carry the older names (`SSP2_BD00/SSP2_BD00_BE45_G4000demand`),
 so both reduce scripts take `--layout=legacy` (`Rscript messageix/run.R matrix NAME
@@ -464,9 +465,9 @@ column of the matrix:
 
 ```bash
 Rscript messageix/R/createMatrix_MM.R --layout=legacy \
-  --run-dir <Di's demand-sweep directory> --out /tmp/check.csv
+  --run-dir <MAgPIE-side collaborator's demand-sweep directory> --out /tmp/check.csv
 Rscript messageix/R/add_woodfuel_to_matrix.R --layout=legacy \
-  --run-dir <Di's demand-sweep directory> --matrix /tmp/check.csv
+  --run-dir <MAgPIE-side collaborator's demand-sweep directory> --matrix /tmp/check.csv
 ```
 
 **Structural checks on every build:**

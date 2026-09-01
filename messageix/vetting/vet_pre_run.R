@@ -5,8 +5,8 @@
 # |  after a queue wait, on a cluster. The checks are cheap and the runs are not.
 # |
 # |  This is the gate before a run. It is not the check after one: whether the
-# |  emulator's answers agree with MESSAGE's is what messageix/feedback_prep/ and
-# |  messageix/feedback_run/ are for, and no check here has an opinion about it.
+# |  emulator's answers agree with MESSAGE's is what messageix/optional/feedback_prep/ and
+# |  messageix/optional/feedback_run/ are for, and no check here has an opinion about it.
 # |
 # |  A check returns one of four statuses:
 # |
@@ -21,7 +21,7 @@
 # |
 # |  Usage, from the MAgPIE model root:
 # |    Rscript messageix/vetting/vet_pre_run.R --experiment default --stage 3 \
-# |      --f56 messageix/feedback_prep/output/default/f56_pollutant_prices.cs3
+# |      --f56 messageix/optional/feedback_prep/output/default/f56_pollutant_prices.cs3
 # |
 # |    --experiment NAME  an experiment of messageix/experiments.R
 # |    --stage N          1, 2 or 3; the stage about to run (default 3)
@@ -220,7 +220,7 @@ vet_checks <- function() {
         if (is.null(ctx$f56)) {
           return(vet_result("FAIL", paste0(
             "no --f56 given. The demand phase cannot be packed without it. Build one from a ",
-            "MESSAGE run with messageix/feedback_prep/feedback_prep.R, or obtain the file; ",
+            "MESSAGE run with messageix/optional/feedback_prep/feedback_prep.R, or obtain the file; ",
             "Rscript messageix/R/pack_demand.R --experiment=", ctx$pcfg$experiment,
             " prints what it has to contain")))
         }
