@@ -583,7 +583,7 @@ differ in a tau-determining setting get an error rather than a wrong trajectory.
 | `force_replace` | `MAGPIE_MM_FORCE_REPLACE` | `cfg$force_replace`; whether a re-run may overwrite a run folder of the same name | `TRUE`. Names are derived from the settings, so re-running one is routine rather than exceptional |
 | `poll_seconds` | `MAGPIE_MM_POLL_SECONDS` | Seconds between checks while the pipeline waits for a phase's runs | `300`. Each check reads the model status out of every finished run, so it is not free; runs take hours and five minutes resolves them finely enough |
 | `timeout_hours` | `MAGPIE_MM_TIMEOUT_HOURS` | Hours to wait for one phase before giving up | `48`. Covers the 84-run demand sweep queued behind other work. A phase still unfinished after that needs a person rather than more waiting |
-| `qos` | `MAGPIE_MM_QOS` | SLURM quality of service, which picks the submission script a run is handed to (`scripts/run_submit/submit_<qos>.sh`) | `priority`, a PIK queue name. A site without it must override. Peaks offers standard, priority and standby |
+| `qos` | `MAGPIE_MM_QOS` | SLURM quality of service, which picks the submission script a run is handed to (`scripts/run_submit/submit_<qos>.sh`) | `priority`, a PIK-cluster queue name (the cluster offers standard, priority and standby). A site without it must override |
 | `slurm_modules` | `MAGPIE_MM_MODULES` | Environment modules loaded before Rscript, in load order | `defaults/piam/1.27,R/4.3.2,gcc/15.2.0`. `gcc` must come last: the compiled piam packages need a C++ runtime symbol that only this module's libstdc++ provides, and a module loaded after it puts an older one in front |
 | `mail_user` | `MAGPIE_MM_MAIL_USER` | Address SLURM mails job notifications to | empty, so job scripts carry no mail instructions at all. No personal address is committed |
 | `patch_repo` | `MAGPIE_MM_PATCH_REPO` | Directory the packing steps write their tarballs into, and the first place MAgPIE looks for input tarballs | `./patch_input`, created on first use and never committed |
@@ -857,7 +857,7 @@ time spent for nothing.
 Emulator generation runs on the PIK cluster. This is a storage constraint rather
 than a preference: one MAgPIE run produces over 1 GB, a full generation needs
 roughly 90 GB, and the UniCC quota is about 100 GB. Access is by requesting a
-PIK cluster account. A Peaks allocation is the equivalent prerequisite there.
+PIK cluster account and a project allocation on it.
 
 Nothing about the environment is hard-coded. The module list, the QoS, the
 repositories and the mail address are infrastructure settings (section 3.4),
@@ -1064,9 +1064,9 @@ only those may still be using it.
   pipeline's forced download.** Both touch the same input tarballs. The
   tentative answer was that it depends on the user and they probably coexist.
   This is unverified.
-- **Built-in submission or custom Peaks submission.** The leaning is to document
+- **Built-in submission or custom PIK-cluster submission.** The leaning is to document
   MAgPIE's own job-submission and QoS flow well rather than build custom
-  tooling. Peaks has three QoS tiers and a project allocation there is a
+  tooling. The PIK cluster has three QoS tiers and a project allocation there is a
   prerequisite either way. Undecided.
 - **Which repository the feedback run belongs in.** Partly resolved: it runs
   outside the MAgPIE wrapper, in `feedback_prep/` and `feedback_run/` on the

@@ -1,11 +1,11 @@
-# |  Auto-generated Peaks-cluster start scripts for MAgPIE's "projects" menu.
+# |  Auto-generated PIK-cluster start scripts for MAgPIE's "projects" menu.
 # |
 # |  Gap this closes (spec B3, 2026-08-25 meeting, owner Dominik, due
 # |  2026-09-01): MAgPIE's interactive start flow (`scripts/start/`, menu
 # |  option 8 "projects") lists any script dropped into
 # |  `scripts/start/projects/`, but the MAgPIE -> MESSAGEix pipeline has no
 # |  step that writes one. A user who wants to submit a resolved experiment
-# |  stage to the Peaks cluster the ordinary MAgPIE way has to hand-write a
+# |  stage to the PIK cluster the ordinary MAgPIE way has to hand-write a
 # |  script first. This file writes that script instead, from the same `cfg`
 # |  list `stage_cfg()` (messageix/R/utils_config.R) already builds for
 # |  `start_run()` -- nothing here recomputes settings, it only serialises
@@ -119,7 +119,7 @@ deparse_cfg_field <- function(name, value) {
 # ---- rendering ------------------------------------------------------------
 
 # Full script text. `qos` overrides cfg$qos when the caller wants to pin a
-# Peaks QoS tier explicitly (standard|priority|standby, scripts/slurmStart.yml)
+# PIK-cluster QoS tier explicitly (standard|priority|standby, scripts/slurmStart.yml)
 # rather than let start_run()'s own load-based heuristic choose one.
 render_start_script <- function(cfg, pcfg, stage, be = NULL, ghg = NULL,
                                  qos = NULL, extra_header = NULL) {
