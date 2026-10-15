@@ -78,7 +78,7 @@ for (fb in feedback_to_run) {
                  additional  = "additional_data_rev4.62.tgz",
                  patch       = feedback_scen[[fb]]$patch)
 
-  cfg$output <- c("output_check", "rds_report")
+  cfg$output <- c("output_check", "extra/disaggregation", "rds_report")
 
   # --- Scenario settings ---
   # SSP2 as the shared basis
